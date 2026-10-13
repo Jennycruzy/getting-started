@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run a Zetaris SQL script one statement at a time.
 
-    python3 scripts/run_sql.py open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql
+    python3 scripts/run_sql.py open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql
     python3 scripts/run_sql.py --channel jdbc --jar /path/to/driver.jar FILE.sql
     python3 scripts/run_sql.py -e "SELECT 1"
     python3 scripts/run_sql.py --dry-run FILE.sql

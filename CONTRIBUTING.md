@@ -17,7 +17,7 @@ This repo's value is in the detail: every source is traceable to a real license,
    - **Verified** — the create script's statements and the select script's queries, including the analytical ones, actually ran successfully against a live instance.
    - **Unverified** — written and believed correct, but not yet run live. This is the default for a new, untested source — don't mark something Verified because the SQL looks right.
    - **Known to fail** — it was run and hit a real blocking issue. See the next section.
-5. **Register it in `open_data/manifest.json`.** One entry per create script: `id`, `kind` (`rest`, `filestore` or `usl`), `script`, `status` (matching the catalog), a one-line `summary`, and `requires`, the ids of any sources that must exist first (for example a USL model lists the sources it activates from, and a source that reuses another's database lists that source). Run `python3 scripts/onboard.py --check`; it fails on a missing script, an unknown or circular dependency, or a create script that isn't listed. This is the one place dependency order is recorded, so don't repeat it in prose.
+5. **Register it in `open_data/manifest.json`.** One entry per create script: `id`, `kind` (`rest`, `filestore` or `usl`), `script`, `status` (matching the catalog: `verified`, `unverified`, `known_to_fail`, or `deprecated`), a one-line `summary`, and `requires`, the ids of any sources that must exist first (for example a USL model lists the sources it activates from, and a source that reuses another's database lists that source). Run `python3 scripts/onboard.py --check`; it fails on a missing script, an unknown or circular dependency, or a create script that isn't listed. This is the one place dependency order is recorded, so don't repeat it in prose.
 6. **Update the package's `HOWTO.md`** if the new source needs anything the existing walkthrough doesn't already cover (a new auth pattern, a new storage option, etc.).
 
 ## Documenting a source that doesn't work
@@ -34,6 +34,17 @@ Don't delete a source just because it failed — a reproducible failure with a c
 3. Add a row to that `known_to_fail/README.md`'s index table.
 4. Update the package's `HOWTO.md` and catalog doc to reflect the new status and location — remove it from any "suggested order" and point to the new path.
 5. If you find a contradiction with an existing record (e.g. an installation test record claiming an earlier successful run of the same statement), don't silently overwrite the old claim or ignore the new one — add an explicit "contradicted by a later run, not yet reconciled" note and flag it for whoever owns the Zetaris engineering relationship.
+
+## Replacing a script with a newer one
+
+When a newer script supersedes an old one (for example `rate_limited/12_company_dns_create.sql` replaced `10_company_dns_sic_create.sql`), keep the old one for reference instead of deleting it:
+
+1. `git mv` the old script pair into that package's `sql/deprecated/` directory, and add a short `DEPRECATED` banner at the top of both files naming the replacement and saying not to run both on one instance (they usually create the same names).
+2. In `open_data/manifest.json`, point the original source id at the new script. Add an entry for the old script with `"status": "deprecated"` and `"replaced_by": "<new id>"`; `scripts/onboard.py` refuses to run it without `--allow-deprecated`, and `--check` fails if any live source still requires it.
+3. In the package's catalog, keep the old row, mark it **Deprecated**, and point to the replacement; keep its script ID as a gap rather than reusing it. Update the HOWTO's suggested order and every comment or doc that named the old path.
+4. Retire anything that only existed for the old script (a warm-up script, a deno task) in the same change.
+
+A `_select.sql` keeps its verification queries commented out so a bulk run of the file doesn't fire reads, and that matters most for a rate-limited source: run them one at a time.
 
 ## Archiving a completed or superseded plan
 

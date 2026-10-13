@@ -12,7 +12,7 @@ The general walkthrough for this package's `sql/` scripts — read this once bef
 
 The fastest way to see this package's whole pattern — namespace, design, compile, activate, verify — on a real, live source, before reading anything else. This uses `sic_usl` (`sql/01_sic_usl_create.sql` / `_select.sql`), the simpler of the two models.
 
-**Prerequisite:** `open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql` Steps 0-1 (through `CACHE TABLE company_dns.sic_codes_raw;`) must already have been run on this instance — this model activates directly from that raw REST table.
+**Prerequisite:** `open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql` Steps 0-2 (through `CACHE TABLE company_dns.sic_codes_raw;`) must already have been run on this instance — this model activates directly from that raw V3 REST table. That script is rate limited, so run its steps one at a time, with 15 seconds or more before each step that calls the endpoint (see its header).
 
 1. Open the Zetaris **SQL Editor** and create the namespace:
    ```sql
@@ -32,7 +32,7 @@ The fastest way to see this package's whole pattern — namespace, design, compi
        industry_group_desc varchar(200)
    );
    ```
-3. Activate it against the raw REST table (the same flattening query `sql/10_company_dns_sic_create.sql` uses for its SchemaStore view):
+3. Activate it against the raw REST table (the same flattening query `sql/12_company_dns_create.sql` uses for its V3 SchemaStore view):
    ```sql
    ACTIVATE USL TABLE lightning.metastore.usl_demo.sic_usl.sic_code AS
    SELECT
@@ -69,7 +69,7 @@ That's the lifecycle through activation. `sql/01_sic_usl_select.sql` has 7 more 
 
 Both scripts here **reuse raw REST tables already registered by the `rest_apis` package** rather than re-registering the same endpoints under USL. Run these first, in this order, if they haven't already been run on the target instance:
 
-1. `open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql` — Steps 0-1 only (through `CACHE TABLE company_dns.sic_codes_raw;`). This package's `01_sic_usl_create.sql` activates directly from `company_dns.sic_codes_raw`.
+1. `open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql` — Steps 0-2 only (through `CACHE TABLE company_dns.sic_codes_raw;`); it also creates the V4 tables and views, which these models do not use. This package's `01_sic_usl_create.sql` activates directly from `company_dns.sic_codes_raw`.
 2. `open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_create.sql` — Step 0 and the seven `CREATE LIGHTNING REST TABLE ..._submissions_raw` statements (the `CREATE SCHEMASTORE VIEW` statements in that script are **not** needed here — this package's `sic_edgar_usl` activates directly from the raw `*_submissions_raw` tables, not from `sql/11`'s own profile views).
 
 This is deliberate: the point of the contrast is that USL's `ACTIVATE ... AS SELECT` clause can do the same flattening/joining work a `SCHEMASTORE VIEW` does, landing in a different (constraint-checked, DQ-capable, materializable) destination — not that USL needs a different set of raw sources.
@@ -84,6 +84,8 @@ See [`usl-sources.md`](usl-sources.md) for the full catalog (tables, what each t
 |---|---|---|
 | [`sql/01_sic_usl_create.sql`](sql/01_sic_usl_create.sql) / [`_select.sql`](sql/01_sic_usl_select.sql) | `sic_usl`, one table (`sic_code`) | Baseline lifecycle: `CREATE NAMESPACE` → `CREATE TABLE` → `COMPILE USL` → `ACTIVATE USL TABLE` (reusing `sql/10_company_dns_sic_create.sql`'s exact `LATERAL VIEW explode()` + `from_json`/`to_json` coercion query) → `RUN DQ` → `MATERIALIZE USL TABLE`. Its self-consistency check runs as a plain query (see section 3). |
 | [`sql/02_sic_edgar_usl_create.sql`](sql/02_sic_edgar_usl_create.sql) / [`_select.sql`](sql/02_sic_edgar_usl_select.sql) | `sic_edgar_usl`, two tables (`company`, `sic_code`) related by `FOREIGN KEY` | Everything `sic_usl` does, plus: an explicit FK relationship (auto-generating its own DQ rule) and a UNION-shaped activation query across 7 raw REST tables in one `ACTIVATE` (replacing `sql/11_edgar_company_profiles_create.sql`'s two-layer per-company-view + `UNION ALL`-view pattern with a single activation). Its description-agreement check also runs as a plain query (see section 3). |
+
+**What was verified.** Both scripts were run unchanged, exactly as they are in this repo, on an instance built from `open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql` (V3 and V4 tables and all four views present), and their `_select.sql` queries were run against the resulting USLs. They activate from the V3 raw table (`company_dns.sic_codes_raw`, which that script keeps under the same name) and do not read the V4 views, so nothing here has been verified about a USL over V4 data or over a schemastore view; whether `ACTIVATE USL TABLE` can read a schemastore view remains untested.
 
 Run them in that order — `sic_usl` is the lower-risk smoke test for the USL lifecycle itself; `sic_edgar_usl` adds relationships on top of a lifecycle already confirmed working.
 
@@ -109,4 +111,4 @@ Both scripts include a commented-out `TEARDOWN` block using `REMOVE USL` and `DR
 
 ## 6. Everything else
 
-For the REST/SchemaStore/VDM version of this same data product, see `open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql`, `open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_create.sql`, and `docs/plans/archive/edgar-sic-enrichment-plan.md`. For the general USL reference material this package is built against, see `docs/guides/zetaris-lightning-sql-companion.md` section 8. For the build-and-verify tracking, see `docs/plans/archive/usl-build-plan.md`.
+For the REST/SchemaStore/VDM version of this same data product, see `open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql`, `open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_create.sql`, and `docs/plans/archive/edgar-sic-enrichment-plan.md`. For the general USL reference material this package is built against, see `docs/guides/zetaris-lightning-sql-companion.md` section 8. For the build-and-verify tracking, see `docs/plans/archive/usl-build-plan.md`.

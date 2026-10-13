@@ -21,7 +21,7 @@
 -- Step 0 and the seven CREATE LIGHTNING REST TABLE <company>_submissions_raw
 -- statements only -- the CREATE SCHEMASTORE VIEW statements in that script
 -- are not needed here (this script activates directly from the raw
--- tables). open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql
+-- tables). open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql
 -- Steps 0-1 must also already be run (same company_dns.sic_codes_raw
 -- dependency as 01_sic_usl_create.sql).
 --   Run 01_sic_usl_create.sql first if this is a fresh instance -- it

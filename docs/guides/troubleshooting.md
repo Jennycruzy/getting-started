@@ -16,7 +16,7 @@ Find your error below. For detailed SQL limits, see the [SQL companion](zetaris-
 | Object already exists | Check its owner and definition. Reuse your matching objects, or ask for a new team name. |
 | Table created but no rows returned | Check the source path, response, schema and Zetaris's access to the source. Try a small SELECT before adding more tables. |
 | HTTP 429 | Wait as instructed by the source. Avoid repeated queries; REST views may fetch the source each time. Check the recipe's cache guidance. |
-| HTTP 502 | Check the source error. For company_dns, run `deno task warmup:company-dns` from the repo root and retry once. Report other or repeated failures. |
+| HTTP 502 or 429 | Check the source error. A 429 means the source's rate limit was hit (company_dns is rate limited): wait 60 seconds and retry that one statement, and cache the table (`CACHE TABLE`) so later queries do not re-fetch. A 502 on a first request can be a cold start: retry once. Report repeated failures. |
 | PUDL registration fails | It's a [known issue](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md). Use PokéAPI for the starter. |
 | A downloaded file won't query | Put it in storage Zetaris can reach, then register it. A file on your laptop may be out of reach. |
 | Chart won't read the result | Compare the real query response with the example's expected format. Check for an error response first. |

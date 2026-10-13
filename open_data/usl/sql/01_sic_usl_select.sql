@@ -2,13 +2,13 @@
 -- Verification and example queries for sic_usl -- see 01_sic_usl_create.sql
 -- for the setup these check. Same table content and column set as
 -- company_dns.sic_codes_table
--- (open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_select.sql),
--- so queries 2-8 below mirror that script's queries 1-7, adapted to this
+-- (open_data/rest_apis/sql/rate_limited/12_company_dns_select.sql),
+-- so queries 2-8 below mirror that script's queries 10-16 (V3 names), adapted to this
 -- USL table -- a direct side-by-side of the two mechanisms against
 -- identical data.
 -- =============================================================================
 
--- 1. Row count -- same expected count as sql/10's sic_codes_table (1005) --
+-- 1. Row count -- same expected count as sql/12's sic_codes_table (1005) --
 -- if this differs, the row-count under-reporting bug flagged in
 -- docs/guides/zetaris-lightning-sql-companion.md section 5 is a candidate
 -- explanation, but check independently (curl against company_dns) before
@@ -17,7 +17,7 @@ SELECT COUNT(*) FROM lightning.metastore.usl_demo.sic_usl.sic_code;   -- expect 
 
 -- 2. Overview -- total SIC codes and how many distinct divisions/major
 -- groups/industry groups they roll up into. Expect 1005/10/83/416, matching
--- sql/10 query 1 (the same underlying data, only the destination differs).
+-- sql/12 query 10 (the same underlying data, only the destination differs).
 SELECT
     COUNT(*) AS total_sic_codes,
     COUNT(DISTINCT division) AS total_divisions,
@@ -27,7 +27,7 @@ FROM lightning.metastore.usl_demo.sic_usl.sic_code;
 
 -- 3. SIC codes per division, ranked -- which division has the broadest SIC
 -- coverage. Manufacturing (division D) is expected to dominate, same as
--- sql/10 query 2.
+-- sql/12 query 11.
 SELECT division, division_desc, COUNT(*) AS sic_code_count
 FROM lightning.metastore.usl_demo.sic_usl.sic_code
 GROUP BY division, division_desc
@@ -84,7 +84,7 @@ ORDER BY division;
 
 -- 9. Self-consistency check: does every SIC code under the same
 -- major_group agree on that major_group's description? Same shape as
--- sql/10 query 8 -- run here as a plain aggregate query, since this check
+-- sql/12 query 17 -- run here as a plain aggregate query, since this check
 -- is confirmed not expressible as a REGISTER DQ rule on this table (see
 -- docs/guides/zetaris-lightning-sql-companion.md section 8.6). Expect zero rows
 -- back.

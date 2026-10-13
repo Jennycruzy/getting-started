@@ -67,8 +67,8 @@ Each script loads `.env.local` (repository root, or the top-level checkout from 
 ```sh
 python3 scripts/preflight.py            # env, REST, instance state
 python3 scripts/preflight.py --jdbc --jar /path/to/driver.jar
-python3 scripts/run_sql.py --dry-run open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql
-python3 scripts/run_sql.py open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql
+python3 scripts/run_sql.py --dry-run open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql
+python3 scripts/run_sql.py open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql
 python3 scripts/run_sql.py --channel jdbc -e "SELECT 1"
 ```
 
@@ -88,7 +88,7 @@ python3 scripts/onboard.py run sic_edgar_usl --dry-run     # plan plus statement
 python3 scripts/onboard.py run company_dns pokeapi         # run several; shared dependencies run once
 ```
 
-Dependencies that already exist are satisfied: a duplicate "already exists" error on a dependency is skipped. The sources you name only skip duplicates with `--skip-exists`. It stops at the first real error and says which source and statement. A source marked `known_to_fail` needs `--allow-known-to-fail`. `--channel jdbc` and `--jar` work as in `run_sql.py`. USL models re-run less predictably than REST sources (re-running `ACTIVATE USL TABLE` is not verified), so run a USL model once and use `REMOVE USL` first if you need to rebuild it.
+Dependencies that already exist are satisfied: a duplicate "already exists" error on a dependency is skipped. The sources you name only skip duplicates with `--skip-exists`. It stops at the first real error and says which source and statement. A source marked `known_to_fail` needs `--allow-known-to-fail`, and one marked `deprecated` needs `--allow-deprecated` (`--list` shows what replaced it). Rate-limited sources (the company_dns scripts, EDGAR, NASA) are run at your own pace: `onboard.py` sends statements back to back, so for those run the create script's steps by hand in the SQL Editor, waiting 15 seconds or more between the steps its header marks "calls the endpoint". `--channel jdbc` and `--jar` work as in `run_sql.py`. USL models re-run less predictably than REST sources (re-running `ACTIVATE USL TABLE` is not verified), so run a USL model once and use `REMOVE USL` first if you need to rebuild it.
 
 ### Tear down and start over
 
@@ -162,7 +162,6 @@ Use [Deno](https://deno.com/agents.md) 2.9 or later. Check your installation wit
 deno task check
 deno task lint
 deno task ping:postgres
-deno task warmup:company-dns
 ```
 
 Or invoke a script directly, as shown in the sections above — each one's shebang line carries its own permission flags.
@@ -176,26 +175,6 @@ python3 -m pip install -r scripts/requirements.txt
 ```
 
 Then run any of `check_zetaris.py`, `query_zetaris.py`, or `ping_postgres.py` as shown above.
-
-## Warm up company_dns
-
-[`warmup_company_dns.ts`](warmup_company_dns.ts) is unrelated to the Zetaris API scripts above — it talks to `company_dns` directly, not to Zetaris, and has no Python equivalent. Its hosted instance (`https://company-dns.mediumroast.io`) can return an empty response or an HTTP 502 on the first request after a period of no traffic; this script polls its `/health` endpoint until the service is warm, then pre-hits the SIC bulk endpoint so Zetaris's own `CREATE LIGHTNING REST TABLE` request lands on an already-warm backend. Run it before `open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql` — see that file's own header and `open_data/rest_apis/HOWTO.md`'s Fast Start.
-
-```sh
-deno run --allow-net --allow-env scripts/warmup_company_dns.ts
-```
-
-For a self-hosted instance, set the URL and grant access to its host explicitly:
-
-```sh
-COMPANY_DNS_BASE_URL=http://localhost:8000 deno run --allow-net --allow-env=COMPANY_DNS_BASE_URL scripts/warmup_company_dns.ts
-```
-
-Or use the pinned-permission Deno task instead of raw flags:
-
-```sh
-deno task warmup:company-dns
-```
 
 ## Fetch local data files for the Parquet/CSV package
 

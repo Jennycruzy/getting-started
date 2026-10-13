@@ -1,14 +1,39 @@
 {
-  "_comment": "Onboarding manifest. Each source's create script, the sources that must exist first ('requires'), and its status. Add a source here when you add its create script; scripts/onboard.py reads this to resolve the order. kind: rest | filestore | usl. status: verified | unverified | known_to_fail.",
+  "_comment": "Onboarding manifest. Each source's create script, the sources that must exist first ('requires'), and its status. Add a source here when you add its create script; scripts/onboard.py reads this to resolve the order. kind: rest | filestore | usl. status: verified | unverified | known_to_fail | deprecated (a deprecated source also names `replaced_by`).",
   "version": 1,
   "sources": [
     {
       "id": "company_dns",
       "kind": "rest",
-      "script": "open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql",
+      "script": "open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql",
       "status": "verified",
       "requires": [],
-      "summary": "SIC industry-classification hierarchy (1,005 codes) from company_dns"
+      "summary": "US SIC hierarchy (1,005 codes) from the company_dns V3 and V4 services, as four views (V3/V4 data x V3/V4 column names). Rate limited"
+    },
+    {
+      "id": "company_dns_eu_nace",
+      "kind": "rest",
+      "script": "open_data/rest_apis/sql/rate_limited/13_company_dns_eu_nace_create.sql",
+      "status": "verified",
+      "requires": [],
+      "summary": "EU NACE classification hierarchy (615 classes) from company_dns V4 staging. Rate limited; CC BY 4.0"
+    },
+    {
+      "id": "company_dns_japan",
+      "kind": "rest",
+      "script": "open_data/rest_apis/sql/rate_limited/14_company_dns_japan_create.sql",
+      "status": "verified",
+      "requires": [],
+      "summary": "Japan industry classification hierarchy (1,460 classes) from company_dns V4 staging. Rate limited; CC BY 4.0"
+    },
+    {
+      "id": "company_dns_legacy",
+      "kind": "rest",
+      "script": "open_data/rest_apis/sql/deprecated/10_company_dns_sic_create.sql",
+      "status": "deprecated",
+      "replaced_by": "company_dns",
+      "requires": [],
+      "summary": "Old V3-only company_dns SIC script; creates the same database, container and view names as company_dns, so never run both"
     },
     {
       "id": "edgar_facts",

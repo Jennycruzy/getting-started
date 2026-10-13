@@ -15,7 +15,9 @@ order, shows it, and runs each create script with scripts/run_sql.py's engine.
 Data sources and USL models are handled the same way: a USL model simply
 `requires` the sources it activates from.
 
-Create scripts change the instance. Use `plan` or `--dry-run` first.
+Create scripts change the instance. Use `plan` or `--dry-run` first. A source with
+status `deprecated` names its `replaced_by` source and is refused by `run` unless
+you pass --allow-deprecated.
 
 `teardown` is the reverse. It derives the SQL drops from each create script
 (DROP VIEW, UNCACHE TABLE, REMOVE USL), also tears down every source that
@@ -36,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import zetaris_sql as z  # noqa: E402
 
 MANIFEST = z.ROOT / "open_data" / "manifest.json"
-STATUSES = {"verified", "unverified", "known_to_fail"}
+STATUSES = {"verified", "unverified", "known_to_fail", "deprecated"}
 KINDS = {"rest", "filestore", "usl"}
 
 
@@ -63,6 +65,18 @@ def check(sources: dict[str, dict]) -> list[str]:
         for dep in src.get("requires", []):
             if dep not in sources:
                 problems.append(f"{sid}: requires unknown source '{dep}'")
+            elif sources[dep].get("status") == "deprecated" and src.get("status") != "deprecated":
+                problems.append(f"{sid}: requires deprecated source '{dep}' (use '{sources[dep].get('replaced_by')}')")
+        if src.get("status") == "deprecated":
+            new = src.get("replaced_by")
+            if not new:
+                problems.append(f"{sid}: deprecated sources need `replaced_by`")
+            elif new not in sources:
+                problems.append(f"{sid}: replaced_by unknown source '{new}'")
+            elif sources[new].get("status") == "deprecated":
+                problems.append(f"{sid}: replaced_by '{new}' is itself deprecated")
+        elif "replaced_by" in src:
+            problems.append(f"{sid}: `replaced_by` is only for deprecated sources")
     if not problems:
         try:
             resolve(sources, list(sources))
@@ -108,7 +122,9 @@ def print_plan(sources: dict[str, dict], order: list[str], targets: list[str]) -
         notes = []
         if sid not in targets:
             notes.append("dependency")
-        if src["status"] != "verified":
+        if src["status"] == "deprecated":
+            notes.append(f"deprecated, use {src.get('replaced_by')}")
+        elif src["status"] != "verified":
             notes.append(src["status"].replace("_", " "))
         if user_agent_needed(src):
             notes.append("needs ZETARIS_USER_AGENT")
@@ -229,6 +245,8 @@ def cmd_list(sources: dict[str, dict]) -> int:
     for sid, src in sources.items():
         print(f"{sid:<22} {src['kind']:<9} {src['status']:<14} {', '.join(src.get('requires', [])) or '-'}")
         print(f"{'':<22} {src['summary']}")
+        if src["status"] == "deprecated":
+            print(f"{'':<22} deprecated: use {src.get('replaced_by')}")
     return 0
 
 
@@ -238,6 +256,12 @@ def cmd_run(args, sources: dict[str, dict]) -> int:
     for t in targets:
         resolve(sources, [t])  # validates ids
     bad = [s for s in order if sources[s]["status"] == "known_to_fail" and s in targets]
+    old = [s for s in order if sources[s]["status"] == "deprecated" and s in targets]
+    if old and not args.allow_deprecated:
+        raise z.ZetarisError(
+            "; ".join(f"{s} is deprecated, use {sources[s].get('replaced_by')}" for s in old)
+            + ". Pass --allow-deprecated to run it anyway."
+        )
     if bad and not args.allow_known_to_fail:
         raise z.ZetarisError(
             f"{', '.join(bad)} is marked known_to_fail (see its known_to_fail/ write-up). "
@@ -307,6 +331,7 @@ def main() -> int:
     p.add_argument("--skip-exists", action="store_true", help="skip 'already exists' errors on the requested sources too (dependencies always do)")
     p.add_argument("--no-deps", action="store_true", help="run only the named sources, not their dependencies")
     p.add_argument("--allow-known-to-fail", action="store_true")
+    p.add_argument("--allow-deprecated", action="store_true", help="run a source marked deprecated (its replacement is shown by --list)")
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--yes", action="store_true", help="teardown: actually send the drops (without it, teardown only prints the plan)")
     p.add_argument("--no-dependents", action="store_true", help="teardown: only the named sources, not the ones that require them")

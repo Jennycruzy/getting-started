@@ -1,19 +1,19 @@
 -- =============================================================================
 -- USL: sic_usl -- a single-table Unified Semantic Layer model over the same
 -- company_dns SIC hierarchy reference data already onboarded via REST in
--- open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql.
+-- open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql.
 --
 -- Purpose: the baseline USL model -- confirms the namespace/COMPILE/
 -- ACTIVATE/DQ/MATERIALIZE lifecycle works before the two-table, FK-related
 -- sic_edgar_usl (02_sic_edgar_usl_create.sql). Kept alongside, not instead
--- of, sql/10's CREATE SCHEMASTORE VIEW version -- see ../HOWTO.md for why
+-- of, sql/12's CREATE SCHEMASTORE VIEW version -- see ../HOWTO.md for why
 -- both exist.
 --
 -- Source: Unified Semantic Layer (USL) User Guide, sections 3-11 and
 -- Appendix B (supplied alongside this repo; no dedicated Kbase page found --
 -- see docs/guides/zetaris-lightning-sql-companion.md section 0).
 --
--- Prerequisite: open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql,
+-- Prerequisite: open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql,
 -- Steps 0-1 only (through CACHE TABLE company_dns.sic_codes_raw;), must
 -- already have been run on this instance -- this script activates directly
 -- from that raw REST table rather than re-registering the company_dns
@@ -51,7 +51,7 @@ CREATE NAMESPACE IF NOT EXISTS lightning.metastore.usl_demo;
 
 -- ---------------------------------------------------------------------------
 -- Step 1: design the table (DDL only, no data yet -- the card renders grey
--- until Step 3's ACTIVATE). Column set matches sql/10's sic_codes_table
+-- until Step 3's ACTIVATE). Column set matches sql/12's sic_codes_table
 -- view exactly, so the two can be compared row for row.
 -- ---------------------------------------------------------------------------
 COMPILE USL IF NOT EXISTS sic_usl DEPLOY NAMESPACE lightning.metastore.usl_demo DDL
@@ -70,10 +70,10 @@ CREATE TABLE sic_code (
 -- Step 2: document the model (optional but cheap -- exercises UPDATE USL
 -- ... SET DESCRIPTION per the guide section 11).
 -- ---------------------------------------------------------------------------
-UPDATE USL lightning.metastore.usl_demo.sic_usl SET DESCRIPTION 'Baseline USL model - SIC hierarchy reference, single table, no relationships. Contrast target for company_dns.sic_codes_table (open_data/rest_apis/sql/non_rate_limited/10_company_dns_sic_create.sql).';
+UPDATE USL lightning.metastore.usl_demo.sic_usl SET DESCRIPTION 'Baseline USL model - SIC hierarchy reference, single table, no relationships. Contrast target for company_dns.sic_codes_table (open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql).';
 
 -- ---------------------------------------------------------------------------
--- Step 3: activate -- reuses sql/10's exact flattening query verbatim (same
+-- Step 3: activate -- reuses sql/12's exact flattening query verbatim (same
 -- from_json(to_json(...), 'map<string, struct<...>>') coercion technique,
 -- unaffected by the USL wrapper -- see docs/guides/zetaris-lightning-sql-companion.md
 -- section 3 and section 8.1). This is the schema-validation test: the
@@ -102,8 +102,8 @@ LATERAL VIEW explode(
 -- a REGISTER DQ rule on this table -- see
 -- docs/guides/zetaris-lightning-sql-companion.md section 8.6 for the confirmed
 -- limitations that rule it out. The check runs instead as a plain
--- aggregate query in 01_sic_usl_select.sql (the same shape as sql/10
--- query 8).
+-- aggregate query in 01_sic_usl_select.sql (the same shape as sql/12
+-- query 17).
 -- ---------------------------------------------------------------------------
 
 -- Run the PK constraint's auto-generated rule (the only DQ rule registered

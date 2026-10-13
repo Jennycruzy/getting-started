@@ -1,4 +1,17 @@
 -- =============================================================================
+-- DEPRECATED. Replaced by ../rate_limited/12_company_dns_create.sql, which loads
+-- the same US SIC hierarchy from the V3 service (under these same names) and also
+-- the V4 service, with four views. Kept for reference only; do not run both
+-- scripts on one instance, since they create the same database, container, raw
+-- table and view.
+--
+-- The company_dns service is rate limited now and no longer runs on Azure
+-- Container Apps, so the cold-start behavior described below, and the warmup
+-- script it mentions (scripts/warmup_company_dns.ts, since removed), no longer
+-- apply.
+-- =============================================================================
+
+-- =============================================================================
 -- Source: company_dns SIC (Standard Industrial Classification) hierarchy
 -- reference data -- 4-digit code, description, and its full
 -- division/major-group/industry-group rollup.

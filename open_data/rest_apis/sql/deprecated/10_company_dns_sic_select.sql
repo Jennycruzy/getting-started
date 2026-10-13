@@ -1,4 +1,10 @@
 -- =============================================================================
+-- DEPRECATED. Replaced by ../rate_limited/12_company_dns_select.sql, which has
+-- these same queries (numbered 10-17 there, V3 names) plus their V4 ports and a
+-- V3-against-V4 comparison. Kept for reference only.
+-- =============================================================================
+
+-- =============================================================================
 -- Verification / example queries for 10_company_dns_sic_create.sql
 -- Assumes 10_company_dns_sic_create.sql has already been run.
 --

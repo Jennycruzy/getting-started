@@ -5,64 +5,43 @@ For first-time onboarding, start with [Start here](../../START-HERE.md) and [you
 
 **File naming:** each numbered source is split into two files sharing a prefix: `NN_<name>_create.sql` (every `CREATE`/`DROP`/`CACHE` DDL statement) and `NN_<name>_select.sql` (verification and, where present, example queries). Run the create script first, then verify with its matching select script — the verification queries there are commented out by default so a bulk run of the file doesn't silently fire read queries.
 
-**Source folders:** each source's script pair lives in one of three folders under `sql/`, based on whether the source API enforces a rate limit:
+**Source folders:** each source's script pair lives in one of four folders under `sql/`, based on whether the source API enforces a rate limit and whether the script is still current:
 
-- `sql/rate_limited/` — the source API caps how many requests you can make in a given window. Run these deliberately: space out repeated runs, prefer a registered API key over an anonymous one where the source offers it, and expect the `CACHE TABLE` guidance in "Known limitations" below to matter more here than elsewhere.
+- `sql/rate_limited/` — the source API caps how many requests you can make in a given window. Some operators set the limit themselves, so it differs between deployments; for `company_dns` the built-in defaults are 200 requests a minute with a burst of 20 (standard) and 5 a minute with a burst of 1 (strictest). A burst larger than the allowance gets HTTP `429` even when the average is low. Run these deliberately: run one statement at a time and wait 15 seconds or more before each statement that calls the endpoint, cache the raw table straight away (`CACHE TABLE`, which these scripts do for you), prefer a registered API key over an anonymous one where the source offers it, and expect the `CACHE TABLE` guidance in "Known limitations" below to matter more here than elsewhere. Every `_select.sql` here keeps its queries commented out: run them one at a time after the cache test the file describes.
 - `sql/non_rate_limited/` — no documented limit, or an informal one (e.g. a fair-use policy) with no hard cap observed in testing. Still be a reasonable citizen of a shared free resource, but you don't need to plan around exhausting a quota.
 - `sql/known_to_fail/` — one source (Singapore's PM2.5 API) that hit a blocking issue during testing. Kept as a documented, reproducible example rather than deleted; not part of the main sequence below. See `sql/known_to_fail/README.md` and its `ISSUE.md`.
+
+- `sql/deprecated/` — scripts that a newer script replaced (currently the old V3-only `company_dns` script, replaced by `rate_limited/12_company_dns_*.sql`). Kept for reference, marked DEPRECATED in their own header and in the catalog, and refused by `scripts/onboard.py` unless you pass `--allow-deprecated`. Do not run a deprecated script and its replacement on the same instance: they create the same names.
 
 `rest-api-sources.md`'s quick-reference table lists which folder each source is in.
 
 ---
 
-## 0. Fast start: `company_dns` end to end in about 5 minutes
+## 0. Fast start: `company_dns` end to end in about 10 minutes
 
-The fastest way to see this package's whole pattern — register, cache, flatten, verify — working on a real, live, stable source, before reading anything else. This uses `company_dns` (`sql/non_rate_limited/10_company_dns_sic_create.sql` / `_select.sql`), a SIC industry-classification hierarchy.
+The fastest way to see this package's whole pattern — register, cache, flatten, verify — working on a real, live source, before reading anything else. This uses `company_dns` (`sql/rate_limited/12_company_dns_create.sql` / `_select.sql`), a SIC industry-classification hierarchy, loaded from both of its API versions side by side.
 
-**Note on stability:** this hosted instance can return an empty response or an HTTP 502 on the first request after idle time — see "Troubleshooting / FAQ" below for why, and the warmup script mentioned in step 1 for the fix. If your first query below comes back empty or 502s, just retry once.
+**It is rate limited.** The service operator sets the limits (defaults: 200 a minute with a burst of 20, or 5 a minute with a burst of 1). Treat it as the strictest tier unless you know otherwise: run **one statement at a time** and wait **15 seconds or more** before each statement marked "calls the endpoint" in the script. The script caches each raw table right after creating it, which is what keeps every later query from calling the service again. If a statement fails with a `429`, wait 60 seconds and retry that one statement.
 
-1. *(Optional, see note above)* From the repository root: `deno run --allow-net --allow-env scripts/warmup_company_dns.ts`.
-2. Open the Zetaris **SQL Editor** and register the logical database:
-   ```sql
-   CREATE LIGHTNING DATABASE COMPANY_DNS DESCRIBE BY "company_dns SIC reference data - division, major group, industry group, SIC code";
-   ```
-3. Register the REST table, then cache it (see "Basic syntax" and "Known limitations" below for what these do and why):
-   ```sql
-   CREATE LIGHTNING REST TABLE sic_codes_raw FROM COMPANY_DNS REQUEST(
-       endpoint "https://company-dns.mediumroast.io/V3.0/na/sic/code/%25",
-       method "get",
-       response_type "json",
-       http_encoding "URLENCODED"
-   ) HEADER (
-       user-agent "YOUR_APP_NAME YOUR_CONTACT_EMAIL"
-   ) BODY ();
+1. Set your user-agent. The create scripts carry a `YOUR_APP_NAME YOUR_CONTACT_EMAIL` placeholder: replace it by hand, or put `ZETARIS_USER_AGENT="<app name> <contact email>"` in `.env.local` and let `scripts/run_sql.py` fill it in.
+2. Open `12_company_dns_create.sql` and run its steps in the Zetaris **SQL Editor**, one statement at a time:
 
-   CACHE TABLE company_dns.sic_codes_raw;
-   ```
-4. Flatten it into a queryable view (this decodes a "dynamic-key" JSON object — see "Understanding JSON response shapes" below):
-   ```sql
-   CREATE SCHEMASTORE CONTAINER company_dns;
+   | Step | Statement | Calls the endpoint? |
+   |---|---|---|
+   | 0 | `CREATE LIGHTNING DATABASE COMPANY_DNS` | no |
+   | 1 | `CREATE LIGHTNING REST TABLE sic_codes_raw` (V3, production) | yes |
+   | 2 | `CACHE TABLE company_dns.sic_codes_raw` | yes — wait 15 s first |
+   | 3 | `CREATE LIGHTNING REST TABLE sic_codes_v4_raw` (V4, staging) | yes — wait 15 s first |
+   | 4 | `CACHE TABLE company_dns.sic_codes_v4_raw` | yes — wait 15 s first |
+   | 5 | `CREATE SCHEMASTORE CONTAINER company_dns` | no |
+   | 6-9 | four `CREATE SCHEMASTORE VIEW` statements | no (they read the cached tables) |
 
-   CREATE SCHEMASTORE VIEW sic_codes_table WITH CONTAINER company_dns AS
-   SELECT
-       sic_code,
-       sic_val.description         AS description,
-       sic_val.division             AS division,
-       sic_val.division_desc        AS division_desc,
-       sic_val.major_group          AS major_group,
-       sic_val.major_group_desc     AS major_group_desc,
-       sic_val.industry_group       AS industry_group,
-       sic_val.industry_group_desc  AS industry_group_desc
-   FROM company_dns.sic_codes_raw
-   LATERAL VIEW explode(
-       from_json(to_json(data.sics), 'map<string, struct<description:string, division:string, division_desc:string, major_group:string, major_group_desc:string, industry_group:string, industry_group_desc:string>>')
-   ) AS sic_code, sic_val;
-   ```
-5. Verify it worked:
+   Steps 1-2 and 3-4 are two copies of one pattern — register the raw response, cache it, flatten it with `LATERAL VIEW explode(...)` — for two response shapes: V3 returns a dynamic-key object that needs the `from_json(to_json(...))` coercion (section 7), V4 returns a plain array.
+3. Verify it worked, timing the first query. About a second means the view reads the cached copy; much longer means it called the service again, so stop and check the cache step:
    ```sql
    SELECT COUNT(*) FROM company_dns.sic_codes_table;   -- expect 1005
    ```
-6. Try a real query — every SIC code in the "Manufacturing" division, for example:
+4. Try a real query — every SIC code in the "Manufacturing" division, for example:
    ```sql
    SELECT sic_code, description, major_group_desc
    FROM company_dns.sic_codes_table
@@ -70,7 +49,9 @@ The fastest way to see this package's whole pattern — register, cache, flatten
    ORDER BY sic_code;
    ```
 
-That's the whole pattern. `sql/non_rate_limited/10_company_dns_sic_select.sql` has 8 more example queries against this same table if you want to keep exploring it before moving on. Everything below explains this pattern in more depth — how to run it against any of the other 8 sources in this package (`1. Running the scripts`), how to check your results are trustworthy (`2. Verifying data`), what to do when something doesn't go as smoothly as it did here, and the full syntax/shape/limitations reference.
+The script builds four views so the two versions can be compared and so existing SQL keeps working: `sic_codes_table` (V3 data, V3 column names, the name everything else in this repo uses), `sic_codes_v4_table` (V4 data, V4 names), and two `_compat_` views that carry one version's data under the other's column names. **V4 renamed the hierarchy levels**, so `division_desc` means a different level in each version (V3: the letter level, "Manufacturing"; V4: the 2-digit level). The script's header has the full mapping table. `12_company_dns_select.sql` has the verification queries (commented out; run them one at a time) and the example queries in both naming schemes.
+
+Two more classification systems from the same service follow the same pattern with a single view each: `13_company_dns_eu_nace_*` (EU NACE, 615 classes) and `14_company_dns_japan_*` (Japan, 1,460 classes). Everything below explains this pattern in more depth — how to run it against any of the other sources in this package (`1. Running the scripts`), how to check your results are trustworthy (`2. Verifying data`), what to do when something doesn't go as smoothly as it did here, and the full syntax/shape/limitations reference.
 
 ---
 
@@ -89,7 +70,7 @@ Suggested order — lowest-risk / simplest shape first, so a failure on a harder
 
 | Order | Script | Why here |
 |---|---|---|
-| 1 | `non_rate_limited/10_company_dns_sic_create.sql` | Already walked through above (Fast Start) — confirms your environment works before trying anything new. |
+| 1 | `rate_limited/12_company_dns_create.sql` | Already walked through above (Fast Start) — confirms your environment works before trying anything new. Rate limited: go slowly. |
 | 2 | `rate_limited/01_edgar_company_facts_create.sql` | Live-tested and working — confirms the baseline array-of-structs pattern end to end. |
 | 3 | `rate_limited/08_statcan_wds_create.sql` | Simplest shape investigated (flat array-of-structs, one level, GET-only) — good smoke test if something else is failing. |
 | 4 | `non_rate_limited/02_pokeapi_create.sql` | Array-of-structs with one extra level of nested struct — tests whether two-level dot-access through an exploded field works. |
@@ -98,6 +79,8 @@ Suggested order — lowest-risk / simplest shape first, so a failure on a harder
 | 7 | `rate_limited/06_nasa_donki_create.sql` | Higher risk: top-level JSON array, not object — untested whether `CREATE LIGHTNING REST TABLE` even accepts this at all. |
 | 8 | `non_rate_limited/07_eurostat_create.sql` | Metadata path confirmed working; JSON-stat format needs the dynamic-key coercion technique (see "Understanding JSON response shapes" below) to decode actual values. |
 | 9 | `non_rate_limited/09_abs_data_api_create.sql` | Higher risk: SDMX-JSON with doubly-compound dynamic keys — same risk class as Eurostat, likely drop candidate. |
+| 10 | `rate_limited/13_company_dns_eu_nace_create.sql` | Same flat-array shape as `company_dns` V4, one view; a different classification system (EU NACE). Rate limited. |
+| 11 | `rate_limited/14_company_dns_japan_create.sql` | Same shape again (Japan, 1,460 classes). Rate limited — leave a few minutes after 12 and 13, since they call the same service. |
 
 **Not in this sequence:** `sql/known_to_fail/04_singapore_pm25_create.sql` is excluded — it hit a blocking connector-or-API issue during testing (an HTTP 502 on its first statement). See "Known limitations" below and `sql/known_to_fail/README.md`.
 
@@ -224,13 +207,23 @@ This is exactly the pattern the Singapore PM2.5 source hit. It's kept in `sql/kn
 
 ### A REST source's HTTP 502 is a cold-start problem, not rate limiting — and can surface as a client-side `TTransportException`
 
-A second, distinct cause of the "HTTP 502" symptom above: not every 502 is rate-limiting (Singapore's cause, previous entry). Some source APIs appear to run on infrastructure that scales to zero between requests (a serverless/cold-start host) — the *first* request after a period of no traffic gets a 502 from whatever's in front of the actual service, and a near-immediate retry succeeds cleanly. `company_dns`'s hosted instance showed this pattern reliably while it ran on Azure Container Apps (see the Fast Start's stability note above for its current hosting); the fix is a small warm-up script that polls a lightweight endpoint (e.g. `/health`) on a short interval until it returns healthy, before running any `CREATE LIGHTNING REST TABLE` or `SELECT` against the real endpoint — see `scripts/warmup_company_dns.ts`.
+A second, distinct cause of the "HTTP 502" symptom above: not every 502 is rate-limiting (Singapore's cause, previous entry). Some source APIs appear to run on infrastructure that scales to zero between requests (a serverless/cold-start host) — the *first* request after a period of no traffic gets a 502 from whatever's in front of the actual service, and a near-immediate retry succeeds cleanly. `company_dns` showed this pattern reliably while it ran on Azure Container Apps; it has since moved to a host that does not scale to zero and is no longer affected, so it no longer needs a warm-up script (the old one was removed). The fix for a source that does behave this way is to make one cheap request first (a `/health` endpoint, if it has one) until it answers, before running the `CREATE LIGHTNING REST TABLE` or `SELECT` that touches the real endpoint. Do not do this against a rate-limited source — see the next entries.
 
 This can surface two different ways depending on *which* statement hits the cold instance:
 - If it happens on `CREATE LIGHTNING REST TABLE` itself, Zetaris reports it as a plain HTTP 502, same as the Singapore case.
 - If it happens on a later `SELECT` (remember: a Lightning REST table re-fetches on every query, not just at `CREATE` time — see `docs/guides/zetaris-lightning-sql-companion.md` section 5 and the next entry below), Zetaris can instead report it as a client-side `java.sql.SQLException: org.apache.thrift.transport.TTransportException`, sometimes bundled as `Multiple exceptions were thrown (3), first java.sql.SQLException: ...` — the "(3)" reflects a connection pool retrying the same failing request across a few pooled connections. Don't assume this wrapped exception means a structural problem (oversized payload, too-wide inferred schema, etc.) just because the message looks like a low-level transport failure — check whether the *next* attempt, made immediately, succeeds before investigating anything else. A `DESCRIBE` on the same table succeeding (schema-only, no live re-fetch) alongside a manual `curl` against the exact same URL succeeding points at cold-start timing, not payload size or schema width.
 
-**Fix:** run (or re-run) a warm-up request immediately before the statement that's about to touch the real data, and retry immediately if a 502-flavored error appears — don't wait, and don't assume a redesign (chunking the request, changing the schema) is needed before ruling out cold start first.
+**Fix:** make one cheap request immediately before the statement that's about to touch the real data, and retry immediately if a 502-flavored error appears — don't wait, and don't assume a redesign (chunking the request, changing the schema) is needed before ruling out cold start first. On a rate-limited source, retry once, then wait: see the `429` entry below.
+
+### A rate-limited source returns `429`, even though I am sending very few queries
+
+The operator of a service like `company_dns` sets its limits, so they differ between deployments. The built-in defaults are 200 requests a minute with a burst of 20 (standard) and 5 a minute with a burst of 1 (strictest). A burst larger than the allowance gets `429` even when the average rate is low, so a handful of requests close together can trip the strict tier. Two things multiply the request count behind one statement: a Lightning REST table re-fetches on every query (next entry), and Zetaris can retry a failing fetch on a few pooled connections.
+
+**Fix:** run the create script one statement at a time, with 15 seconds or more before each statement it marks "calls the endpoint"; cache the raw table straight away (`CACHE TABLE`) so later queries read the cached copy; after a `429`, wait 60 seconds and retry that one statement rather than re-running the script. Time the first query after the cache step: about a second means it read the cache. If you are not sure which tier you are on, assume the strictest.
+
+### `WHERE division_desc LIKE '%Manufacturing%'` returns nothing against the V4 `company_dns` data
+
+V4 renamed the four hierarchy levels, so a column name can mean a different level than it did in V3. V3's `division` (letter) is V4's `section_id`, V3's `major_group` (2-digit) is V4's `division_id`, V3's `industry_group` (3-digit) is V4's `group_id`, and V3's `sic_code` is V4's `class_id`. "Manufacturing" is a `division_desc` in V3 but a `section_desc` in V4. Use `sic_codes_v4_compat_table` to run V3-era SQL unchanged against V4 data, or the V4 names against `sic_codes_v4_table`. `12_company_dns_create.sql` has the full mapping table.
 
 ### A query fails with a rate-limit error well after `CREATE LIGHTNING REST TABLE` already succeeded
 
@@ -334,10 +327,10 @@ The general technique — which shape needs `explode()`, plain dot-access, or th
 
 What's specific to this package is which source lands in which shape bucket, so you know what you're dealing with before opening a script:
 
-1. **Top-level object, array-of-structs field(s)** (companion guide §2, case 1) — EDGAR, PokéAPI, Open Food Facts live API, NASA NeoWs. PokéAPI nests a struct *inside* the array's struct (`ability.ability.name`, two levels deep, confirmed working). Open Food Facts' `ingredients` array goes further still — some entries are compound ingredients carrying their own nested `ingredients` sub-array (e.g. a biscuit's "Céréale" entry breaking down into wheat flour and whole wheat flour) — a single `explode()` only reaches the top-level entries; going deeper would need a second `explode()`, not built in that script.
+1. **Top-level object, array-of-structs field(s)** (companion guide §2, case 1) — EDGAR, PokéAPI, Open Food Facts live API, NASA NeoWs, and the `company_dns` V4, EU NACE and Japan endpoints (a flat array of objects directly under `data`, so a plain `explode(data)` is enough). PokéAPI nests a struct *inside* the array's struct (`ability.ability.name`, two levels deep, confirmed working). Open Food Facts' `ingredients` array goes further still — some entries are compound ingredients carrying their own nested `ingredients` sub-array (e.g. a biscuit's "Céréale" entry breaking down into wheat flour and whole wheat flour) — a single `explode()` only reaches the top-level entries; going deeper would need a second `explode()`, not built in that script.
 2. **Array-of-structs nested under a non-array wrapper key** (companion guide §2, case 2) — Singapore's PM2.5 API (`sql/known_to_fail/`, see "Known limitations" above): the array lives at `data.items`, each item's per-region breakdown (`readings.pm25_one_hourly`) is itself a fixed struct, not an array.
 3. **Top-level JSON array, no wrapping object** (companion guide §2, case 3) — NASA DONKI's CME endpoint. Every confirmed-working source so far returns a top-level object; whether `CREATE LIGHTNING REST TABLE` can register a table from a bare top-level array is untested — this is the first thing to check for that script, before worrying about flattening.
-4. **Dynamic-key ("map-shaped") object** (companion guide §3) — Eurostat, the Australian ABS Data API, and `company_dns`'s SIC lookup (see the Fast Start above) all use the `from_json(to_json(...), 'map<...>')` coercion technique. For Eurostat specifically, the sparse `value` object is addressable two ways — a low-risk option (direct backtick-quoted dot-access to specific known-present numeric keys, e.g. `` value.`522` ``) and the higher-risk full-decode coercion, which needs to be applied to *every* dynamic-key object exploded in the same query — see `sql/non_rate_limited/07_eurostat_create.sql`'s caveats for the exact error a partial application produces. Whether the same technique helps ABS's doubly-compound-key structure is untested and likely harder, since ABS needs two levels of key decoding, not one.
+4. **Dynamic-key ("map-shaped") object** (companion guide §3) — Eurostat, the Australian ABS Data API, and `company_dns`'s V3 SIC lookup (see the Fast Start above; its V4 endpoint dropped the dynamic keys) all use the `from_json(to_json(...), 'map<...>')` coercion technique. For Eurostat specifically, the sparse `value` object is addressable two ways — a low-risk option (direct backtick-quoted dot-access to specific known-present numeric keys, e.g. `` value.`522` ``) and the higher-risk full-decode coercion, which needs to be applied to *every* dynamic-key object exploded in the same query — see `sql/non_rate_limited/07_eurostat_create.sql`'s caveats for the exact error a partial application produces. Whether the same technique helps ABS's doubly-compound-key structure is untested and likely harder, since ABS needs two levels of key decoding, not one.
 5. **Flat struct, no array anywhere** — Open Food Facts' `product.nutriments`, plain dot-access all the way down (`product.nutriments.sugars_100g`), no `LATERAL VIEW explode()` involved. Don't reach for `explode()` reflexively on every nested field; check whether the JSON node is actually an array first.
 
 Not yet hit in this package: a **parallel-arrays** shape (separate `times: [...]` / `values: [...]` meant to be read pairwise) — would need `posexplode()` + positional indexing instead of a plain `explode()`. Confirm the actual JSON shape (`curl` or the browser) before writing a new script's `SELECT`; don't assume array-of-structs is universal.
