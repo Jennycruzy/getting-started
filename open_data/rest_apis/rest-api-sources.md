@@ -1,8 +1,8 @@
 # REST API Data Sources for Zetaris Quick-Starts
 
-A catalog of REST API sources you can point a small Zetaris deployment at directly via `CREATE LIGHTNING REST TABLE` — no file download, the JSON response becomes a queryable table (raw) plus a flattened `SCHEMASTORE` view (tabular). Each entry lists the license, the access requirements, and a docs link. For the SQL syntax pattern, the JSON-shape taxonomy, and troubleshooting, see `HOWTO.md` — it isn't repeated here.
+A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each entry records its licence, access needs, verification status, and documentation. See [`HOWTO.md`](HOWTO.md) for SQL patterns and JSON shapes.
 
-**License key:** Open — use it freely (read the note for any attribution requirement) · Open, with a condition — worth reading before you build on it · Not included — see the note for why
+**Licence key:** Open · Open with conditions · Not included or unresolved. Read each source's note before reuse.
 
 **Script location:** onboarding scripts live in four folders under `sql/`, grouped by whether the source API enforces a rate limit — `sql/rate_limited/`, `sql/non_rate_limited/` — plus `sql/known_to_fail/` for the one source that didn't work out and `sql/deprecated/` for a script a newer one replaced. See `HOWTO.md`'s "Source folders" section for what that grouping means for how you run a script.
 
@@ -10,7 +10,7 @@ A catalog of REST API sources you can point a small Zetaris deployment at direct
 
 ## Quick-reference table
 
-| # | Source | Domain | License | Rate limit | Verification | Script |
+| # | Source | Domain | Licence | Rate limit | Verification | Script |
 |---|---|---|---|---|---|---|
 | 1 | SEC EDGAR XBRL Company Facts | Financial/regulatory | Ambiguous | Rate limited | Verified | `sql/rate_limited/01_edgar_company_facts_create.sql` |
 | 2 | PokéAPI | Structured game data | Open (BSD-3-Clause) | Not rate limited | Verified | `sql/non_rate_limited/02_pokeapi_create.sql` |
@@ -33,66 +33,66 @@ A catalog of REST API sources you can point a small Zetaris deployment at direct
 
 ## 1. SEC EDGAR XBRL Company Facts API — license: ambiguous
 
-- **What it is:** structured financial facts (revenue, and other US-GAAP tags) extracted from public companies' own XBRL-tagged filings, served as JSON per company/concept via `data.sec.gov/api/xbrl/companyconcept/CIK{10-digit-cik}/us-gaap/{tag}.json`.
-- **License:** filings are filer-authored, not government-authored — free API access doesn't automatically mean a copyright/license grant over the extracted facts. Query the live API for a demo; don't bulk-redistribute a copy of the extracted data.
-- **Access:** free, no authentication, but SEC requires a declared `User-Agent` (blocks default/missing ones) and caps requests at 10/sec — see [SEC's developer FAQ](https://www.sec.gov/os/webmaster-faq#developers).
+- **What it is:** company XBRL facts, served per company and US-GAAP tag.
+- **Licence:** filings are company-authored; free API access does not grant a data licence. Query live, but do not bulk-redistribute extracted data.
+- **Access:** free, no authentication. Send a declared `User-Agent`; limit requests to 10/second. See the [SEC developer FAQ](https://www.sec.gov/os/webmaster-faq#developers).
 - **Docs:** [Accessing EDGAR data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data) · [EDGAR company search](https://www.sec.gov/cgi-bin/browse-edgar) (for confirming a company's current CIK)
 
 ## 2. PokéAPI — license: open (BSD-3-Clause)
 
-- **What it is:** structured game data (Pokémon stats, abilities, moves, types) — a large, well-modeled REST API good for showing nested JSON.
-- **License:** BSD-3-Clause for the code/API — [LICENSE.md](https://github.com/PokeAPI/pokeapi/blob/master/LICENSE.md). Fair Use Policy: cache responses, don't load-test it. Pokémon names/characters are Nintendo trademarks — fine for a technical demo, not for anything Zetaris-branded.
-- **Access:** no signup, no formal rate limit (removed 2018) but the Fair Use Policy still applies.
+- **What it is:** Pokémon stats, abilities, moves, and types, including nested JSON.
+- **Licence:** BSD-3-Clause for the API code. Follow its Fair Use Policy and cache responses. Pokémon names and characters are Nintendo trademarks; this source is for technical demos, not Zetaris-branded material.
+- **Access:** no signup or formal rate limit; fair use still applies.
 - **Docs:** [pokeapi.co/docs/v2](https://pokeapi.co/docs/v2)
 
 ## 3. Open Food Facts — live single-product API — license: open, with a condition (ODbL)
 
-- **What it is:** the live per-product lookup API, distinct from the bulk CSV/JSONL export onboarded as a filestore source in `../parquet_csv/` — this demonstrates the single-record REST pattern specifically.
-- **License:** ODbL — same as the bulk-export entry in `../parquet_csv/parquet-csv-data-sources.md`. Attribution required, share-alike if redistributing a combined database.
-- **Access:** no signup, but requires a custom `User-Agent`; per-endpoint rate limits apply.
+- **What it is:** a live, single-product lookup. The bulk export is a separate filestore source in [`../parquet_csv/parquet-csv-data-sources.md`](../parquet_csv/parquet-csv-data-sources.md).
+- **Licence:** ODbL. Attribute the data and share alike when redistributing a combined database.
+- **Access:** no signup; send a custom `User-Agent` and observe endpoint rate limits.
 - **Docs:** [openfoodfacts.github.io/openfoodfacts-server/api](https://openfoodfacts.github.io/openfoodfacts-server/api/)
 
 ## 4. Singapore data.gov.sg — PM2.5 real-time API — license: open (SODL v1.0) — known to fail
 
-- **What it is:** national air-quality readings (PM2.5), updated hourly, part of data.gov.sg's real-time API family (same family as weather forecasts, rainfall, tide/temperature readings).
-- **License:** Singapore Open Data Licence (SODL) v1.0 — same umbrella license as the pulled-forward data.gov.sg CSV source in `../parquet_csv/`.
-- **Access:** no key or headers needed for testing. Documented as 5 requests/minute, but the real burst limit is tighter in practice.
+- **What it is:** hourly national PM2.5 readings.
+- **Licence:** Singapore Open Data Licence (SODL) v1.0, also used by the data.gov.sg CSV source in [`../parquet_csv/`](../parquet_csv/parquet-csv-data-sources.md).
+- **Access:** no key or headers. The documented limit is 5 requests/minute; testing hit a tighter burst limit.
 - **Docs:** [guide.data.gov.sg/developer-guide/real-time-apis](https://guide.data.gov.sg/developer-guide/real-time-apis)
-- **Why it's here rather than in the main script set:** `CREATE LIGHTNING REST TABLE` returned an HTTP 502 on the first statement run against it. Kept as a documented, reproducible example rather than dropped — see `sql/known_to_fail/ISSUE.md` for the full investigation.
+- **Status:** the first `CREATE LIGHTNING REST TABLE` returned HTTP 502. See the [issue write-up](sql/known_to_fail/ISSUE.md); this source is excluded from the main sequence.
 
 ## 5. NASA NeoWs (Near Earth Object Web Service) — license: open (public domain)
 
-- **What it is:** structured asteroid/near-Earth-object data — this script uses `/neo/browse` (a flat, paginated catalog) rather than `/neo/rest/v1/feed` (whose response is keyed by date string, a shape `explode()` isn't built for).
-- **License:** NASA content is a U.S. federal government work, public domain (17 U.S.C. §105).
-- **Access:** `DEMO_KEY` works with no signup (30 req/hour, 50/day per IP); a free `api.data.gov` key raises this to 1,000 req/hour. Shares its quota with NASA DONKI (source 6) if both are used against `DEMO_KEY` in the same session.
+- **What it is:** a flat, paginated asteroid catalog from `/neo/browse`; the date-keyed `/neo/rest/v1/feed` uses a different, unsupported shape.
+- **Licence:** NASA content is a U.S. federal government work, public domain (17 U.S.C. §105).
+- **Access:** `DEMO_KEY` needs no signup (30 requests/hour, 50/day per IP). A free `api.data.gov` key raises this to 1,000/hour. NeoWs and DONKI share the `DEMO_KEY` quota.
 - **Docs:** [api.nasa.gov](https://api.nasa.gov/)
 
 ## 6. NASA DONKI (Space Weather) — license: open (public domain) — unverified
 
 - **What it is:** Coronal Mass Ejection (CME) space-weather events, queryable by date range.
-- **License:** same NASA public-domain basis as NeoWs.
-- **Access:** same `api.data.gov` key system as NeoWs, same shared quota.
+- **Licence:** same NASA public-domain basis as NeoWs.
+- **Access:** the same `api.data.gov` key and shared `DEMO_KEY` quota as NeoWs.
 - **Docs:** [api.nasa.gov](https://api.nasa.gov/) (DONKI section)
-- **Open question:** the response is a top-level JSON array rather than an object, unlike every other source in this catalog — whether `CREATE LIGHTNING REST TABLE` accepts that shape at all hasn't been confirmed against a live instance yet. See the create script's own caveats.
+- **Unverified:** the response is a top-level JSON array. Live registration of that shape has not been confirmed; see the create script's caveats.
 
 ## 7. Eurostat REST API — license: open, with a condition
 
-- **What it is:** EU statistical data (e.g. unemployment rate, HICP inflation) via a fully public SDMX/REST API.
-- **License:** Eurostat's copyright policy is generally understood to align with CC-BY 4.0 — the policy page itself is worth reading directly, not independently confirmed as a hard match.
+- **What it is:** EU statistics, including unemployment and HICP inflation, through a public SDMX/REST API.
+- **Licence:** commonly understood to align with CC-BY 4.0, but this has not been independently confirmed. Read Eurostat's policy before reuse.
 - **Access:** no key, no registration, CORS-enabled.
 - **Docs:** [Eurostat API Statistics guide](https://wikis.ec.europa.eu/display/EUROSTATHELP/API+Statistics+-+data+query)
 
 ## 8. Statistics Canada Web Data Service (WDS) — license: open (StatCan Open Licence)
 
-- **What it is:** `getChangedCubeList` — a discovery endpoint listing which StatCan datasets ("cubes") recently published new data.
-- **License:** Statistics Canada Open Licence — same permissive family as OGL-Canada 2.0; don't combine with other sources to re-identify individuals.
-- **Access:** no key or registration, rate-limited at 50 req/sec system-wide / 25/sec per IP.
+- **What it is:** `getChangedCubeList`, which lists recently updated Statistics Canada datasets ("cubes").
+- **Licence:** Statistics Canada Open Licence. Do not combine the data to re-identify people.
+- **Access:** no key; limit requests to 50/second system-wide and 25/second per IP.
 - **Docs:** [statcan.gc.ca/en/developers/wds/user-guide](https://www.statcan.gc.ca/en/developers/wds/user-guide)
 
 ## 9. Australian Bureau of Statistics (ABS) Data API — license: open (CC-BY 3.0 AU)
 
-- **What it is:** Australian economic/statistical data (this example: CPI) via ABS's SDMX-based Data API.
-- **License:** CC-BY 3.0 Australia by default — the older 3.0 port, not 4.0. Still genuinely permissive; some individual datasets may specify 4.0 instead.
+- **What it is:** Australian statistics, using CPI as the example, through the ABS SDMX Data API.
+- **Licence:** CC-BY 3.0 Australia by default. Individual datasets may use 4.0; check the dataset terms.
 - **Access:** no API key required.
 - **Docs:** [ABS Data API user guide](https://www.abs.gov.au/statistics/application-programming-interfaces-apis/data-api-user-guide/using-api)
 
@@ -100,9 +100,9 @@ A catalog of REST API sources you can point a small Zetaris deployment at direct
 
 - **Deprecated:** replaced by source 12 (`sql/rate_limited/12_company_dns_create.sql`), which loads the same V3 data under the same names and adds V4. The old scripts are in `sql/deprecated/`. The "no documented rate limit" note below describes the service as it was; it is rate limited now (see source 12).
 
-- **What it is:** a company-firmographics/industry-classification service (`github.com/miha42-github/company_dns`) that, among other things, serves the full US Standard Industrial Classification (SIC, 1987 revision) hierarchy — 4-digit code, description, and its division/major-group/industry-group rollup — as REST/JSON.
-- **License:** the service itself is Apache 2.0. Its SIC data traces back to SEC's own public SIC list — query live, don't bulk-redistribute the extracted data.
-- **Access:** hosted instance at `https://company-dns.mediumroast.io`, no key or signup; also self-hostable via Docker at `http://localhost:8000`. No documented rate limit.
+- **What it is:** REST/JSON for the 1987 U.S. SIC hierarchy: code, description, division, major group, and industry group.
+- **Licence:** the service is Apache 2.0. The SIC data traces to the SEC's public list; query live, but do not bulk-redistribute extracted data.
+- **Access:** hosted at `https://company-dns.mediumroast.io`, with no key or documented rate limit. It can also be self-hosted at `http://localhost:8000`.
 - **Docs:** interactive API reference at `/docs` on the hosted instance; OpenAPI spec at `/openapi.json`.
 
 ## 11. EDGAR company profiles — SIC-enriched — license: ambiguous (see source 1)

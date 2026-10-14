@@ -1,39 +1,27 @@
 # Connect to Zetaris
 
-[Get access first](../../START-HERE.md), then choose how you want to run SQL. The SQL Editor is the easiest place to start.
-
-| Option | What you need | Check it works |
-|---|---|---|
-| SQL Editor | Website URL, your account and query permissions | Run `SELECT 1 AS one;`. Expect one row with `1`. |
-| Assistant over JDBC | Zetaris driver JAR, JDBC endpoint, account and Java | Run `SELECT 1`. Expect one row with `1`. |
-| HTTP helpers | Supported UI URL, numeric org ID, account or token, and Python or Deno | Run `SELECT 1` with the query helper. |
-
-Use your own account and assigned team names on the shared instance.
+[Get access first](../../START-HERE.md). You need the website URL, your account and query permission. Keep credentials private.
 
 ## SQL Editor
 
-Sign in and open the SQL Editor. Run one complete statement at a time. Then try [your first dataset](../guides/first-dataset.md).
+Sign in and open the SQL Editor. This is the recommended beginner route and needs no additional client tools.
 
-You don't need Java, a JDBC driver, Python or Deno for this option.
+Run [your first SQL commands](lightning-recipe-reference.md) to confirm execution and query the supplied samples. Run one complete statement at a time and wait for the result.
 
 ## Coding assistants
 
-Follow the guide for [Cursor](cursor-connection.md), [Codex](codex-connection.md), or [Claude Code](claude-code-connection.md).
+This is an optional alternative to SQL Editor.
 
-For JDBC, get the matching Zetaris driver from the platform download. Use Zetaris Lightning SQL and its driver; don't substitute a Hive or Spark driver or start a local Spark session.
+Configure [client setup](client-setup.md), then follow [Cursor](cursor-connection.md), [Codex](codex-connection.md), or [Claude Code](claude-code-connection.md) for the starter prompt. JDBC needs Java, the matching driver JAR, endpoint and account.
 
-Direct REST uses an API key and the platform's OpenAPI spec. Its URL and credentials differ from the UI proxy helpers below. Follow your assistant's guide for the right settings.
-
-Need SQL syntax? See the [recipe reference](lightning-recipe-reference.md) or [full SQL reference](../guides/zetaris-lightning-sql-commands.md).
+Use the Zetaris driver; don't substitute a Hive/Spark driver or start a local Spark session. Direct REST uses an API key and the platform's OpenAPI specification; follow your assistant's guide.
 
 ## HTTP helpers
 
-Follow [client scripts](../../scripts/HOWTO.md) to set up `.env.local`, authentication and the org ID.
+This is another optional route. You need Python or Deno, the UI URL, numeric organisation ID, and an account or token.
 
-Use a UI URL that supports the documented proxy routes. If it doesn't, use SQL Editor or JDBC. Changing the URL to a raw API port won't fix it.
+Follow [client scripts](../../scripts/HOWTO.md) for `.env.local`, authentication and the connection check. The helpers use UI proxy routes; the raw API URL is not a substitute.
 
-## Run a recipe
+## Next step
 
-Use `onboard.py --list` to see recipes and `onboard.py plan <id>` to see their dependencies. Use `run_sql.py` for a single SQL file with several commands. Preview with `--dry-run` and check your team names before running anything that creates objects.
-
-The older query helper sends a whole file as one request. Use the runners above for multi-command files. Keep a multi-table `COMPILE USL` command together. See [client scripts](../../scripts/HOWTO.md) for the commands.
+Once connected, [run your first SQL commands](lightning-recipe-reference.md). Use the [full reference](../guides/zetaris-lightning-sql-commands.md) later for additional commands and their prerequisites.

@@ -1,29 +1,65 @@
 # Your first dataset
 
-Let's query Pikachu's abilities using [PokéAPI](https://pokeapi.co/). [Connect to Zetaris](../connections/README.md) first.
+After [querying the supplied samples](../connections/lightning-recipe-reference.md), connect PokéAPI and query Pikachu's abilities.
+
+## What you need
+
+- Permission to create objects and assigned team names on the shared instance.
+- Outbound access from Zetaris to `https://pokeapi.co`.
+
+Replace `POKEAPI_REST` and `pokeapi_rest` with your assigned database name, and `pokeapi` with your assigned container name everywhere below. Reuse an existing object only if it belongs to your team and its definition matches.
 
 ## Set it up
 
-Open the [PokéAPI setup SQL](../../open_data/rest_apis/sql/non_rate_limited/02_pokeapi_create.sql). For this starter, you only need these four complete statements:
+Run these four blocks in order, one at a time. Stop if a block fails.
 
-1. Create the Lightning database `POKEAPI_REST`.
-2. Create the SchemaStore container `pokeapi`.
-3. Create the REST table `pikachu_facts`.
-4. Create the view `pikachu_abilities_table`.
+Create the Lightning database:
 
-Copy those statements into your own SQL file. On the shared instance, replace `POKEAPI_REST`, `pokeapi_rest` and `pokeapi` with your assigned database and container names throughout. Get permission to create them, then run one statement at a time in the SQL Editor.
+```sql
+CREATE LIGHTNING DATABASE POKEAPI_REST DESCRIBE BY "PokeAPI REST source";
+```
 
-If you use `run_sql.py`, preview your file with `--dry-run` first. `onboard.py plan pokeapi` covers the full recipe, including the optional tables below.
+Create the SchemaStore container:
 
-Leave the types, stats, Charizard and union views for later. Skip objects you've already created after checking their definitions match.
+```sql
+CREATE SCHEMASTORE CONTAINER pokeapi;
+```
+
+Create the REST table:
+
+```sql
+CREATE LIGHTNING REST TABLE pikachu_facts FROM POKEAPI_REST REQUEST(
+    endpoint "https://pokeapi.co/api/v2/pokemon/pikachu",
+    method "get",
+    response_type "json",
+    http_encoding "URLENCODED"
+) HEADER (
+) BODY ();
+```
+
+Create the abilities view:
+
+```sql
+CREATE SCHEMASTORE VIEW pikachu_abilities_table WITH CONTAINER pokeapi AS
+SELECT
+    id,
+    name AS pokemon_name,
+    base_experience,
+    height,
+    weight,
+    ability.is_hidden,
+    ability.slot,
+    ability.ability.name AS ability_name,
+    ability.ability.url AS ability_url
+FROM pokeapi_rest.pikachu_facts
+LATERAL VIEW explode(abilities) AS ability;
+```
 
 ## Check the rows
 
-Replace `TEAM_07_POKEAPI` with your assigned SchemaStore container, then run:
-
 ```sql
 SELECT pokemon_name, ability_name, is_hidden
-FROM TEAM_07_POKEAPI.pikachu_abilities_table;
+FROM pokeapi.pikachu_abilities_table;
 ```
 
 The [recorded test](../install/zetaris-installation-test-record.md) returned:
@@ -33,7 +69,7 @@ The [recorded test](../install/zetaris-installation-test-record.md) returned:
 | static | No |
 | lightning-rod | Yes |
 
-Check your actual result. If it differs, inspect `pikachu_facts` in your database. The source can change, and REST queries may fetch it again. Follow PokéAPI's fair-use guidance.
+If your result differs, inspect `pikachu_facts`. REST queries can fetch the API again; follow PokéAPI's fair-use guidance.
 
 ## Ask a question
 
@@ -41,16 +77,14 @@ Which ability is hidden?
 
 ```sql
 SELECT pokemon_name, ability_name
-FROM TEAM_07_POKEAPI.pikachu_abilities_table
+FROM pokeapi.pikachu_abilities_table
 WHERE is_hidden = true;
 ```
 
-Use your container name here too. You should see `lightning-rod` if the source still matches the recorded test. Save your query and result.
+Expect `lightning-rod`. Use your assigned container name in both queries.
 
-## Try more data
+## Next step
 
-The [NOAA recipe](../../open_data/parquet_csv/sql/02_noaa_ghcn_create.sql) is a later option. It reads a large annual CSV and needs caching for its analysis queries. Check the [file guide](../../open_data/parquet_csv/HOWTO.md) and your cache permissions first.
+[Choose what to build](project-paths.md). For additional sources, see [Cookbooks](recipe-readiness.md). If a step fails, use [troubleshooting](troubleshooting.md) before rerunning.
 
-PUDL is currently blocked by a registration failure. Use PokéAPI for the starter. The [issue](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md), [historical SQL](../../open_data/parquet_csv/sql/known_to_fail/03_pudl_create.sql) and [test record](../install/zetaris-installation-test-record.md) keep the earlier details. Only try PUDL after your administrator confirms it works or approves a fix.
-
-Once you have real rows, [choose what to build](project-paths.md). If a step fails, check [troubleshooting](troubleshooting.md) before rerunning it.
+Using scripts? Follow [client scripts](../../scripts/HOWTO.md) and preview with `--dry-run` before creating objects.

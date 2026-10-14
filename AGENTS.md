@@ -23,7 +23,7 @@ Run `python3 scripts/preflight.py` (add `--jdbc --jar <path>` for JDBC). It is r
    set -a; . "$ENV"; set +a
    for v in ZETARIS_API_KEY ZETARIS_USERNAME ZETARIS_PASSWORD; do [ -n "$(printenv "$v")" ] && echo "$v set" || echo "$v MISSING"; done
    ```
-2. **REST.** `GET /datasource/datasources` returns 200, and `SELECT 1` through `/sql-editor/sqls/run` returns `1`. A 401 means a bad key; a 400 means a bad `X-Org-ID` or a non-UUID `X-Request-ID`.
+2. **REST.** `GET /datasource/datasources` returns 200, and `SELECT 1` through `/sql-editor/sqls/run` returns `1`. A 401 means a bad key; a 400 means a bad `X-Org-ID` or a non-UUID `X-Request-ID`. If localhost fails with `Operation not permitted` before an HTTP response, treat it as a possible command-environment network restriction, not an API or credential failure. Request approved/elevated execution for the same read-only preflight and retry when available. If access is unavailable or denied, report the blocker and stop; do not change the endpoint or credentials to work around it.
 3. **JDBC** (only if the user wants JDBC):
    - **Endpoint:** `nc -z localhost 10000` succeeds.
    - **Java:** JDK 11 or later. On macOS `java` can be a stub that reports "Unable to locate a Java Runtime" even when a Homebrew JDK exists. Check `/usr/libexec/java_home`, then `/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home`, and export `JAVA_HOME`. If none exists, offer `brew install openjdk@17`. The `temurin` cask needs `sudo`, which the agent cannot enter.

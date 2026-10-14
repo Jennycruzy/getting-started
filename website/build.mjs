@@ -13,45 +13,53 @@ const github = `https://github.com/${repository}`;
 const groups = [
   ['Your first project', [
     ['START-HERE.md', 'Start here'],
-    ['docs/install/updated_zetaris_installation_guide.md', 'Install locally'],
     ['docs/connections/README.md', 'Connect to Zetaris'],
-    ['docs/guides/first-dataset.md', 'Get your first rows'],
+    ['docs/connections/lightning-recipe-reference.md', 'Run your first SQL'],
+    ['docs/guides/first-dataset.md', 'Connect PokéAPI'],
     ['docs/guides/project-paths.md', 'Choose your project'],
     ['docs/guides/demo-template.md', 'Prepare your demo'],
   ]],
-  ['Help and reference', [
-    ['docs/guides/troubleshooting.md', 'Troubleshooting'],
-    ['docs/guides/recipe-readiness.md', 'Available recipes'],
+  ['Cookbooks', [
+    ['docs/guides/recipe-readiness.md', 'Choose a cookbook'],
+    ['open_data/rest_apis/HOWTO.md', 'REST cookbook'],
+    ['open_data/rest_apis/rest-api-sources.md', 'REST source catalog'],
+    ['open_data/parquet_csv/HOWTO.md', 'File cookbook'],
+    ['open_data/parquet_csv/parquet-csv-data-sources.md', 'File source catalog'],
+    ['open_data/usl/HOWTO.md', 'USL cookbook'],
+    ['open_data/usl/usl-sources.md', 'USL model catalog'],
+    ['docs/guides/create-edgar-pudl-noaa-usl.md', 'EDGAR, PUDL and NOAA'],
+  ]],
+  ['Agents and scripts', [
+    ['docs/connections/client-setup.md', 'Client setup'],
     ['scripts/HOWTO.md', 'Client scripts'],
     ['docs/connections/cursor-connection.md', 'Cursor connection'],
     ['docs/connections/codex-connection.md', 'Codex connection'],
     ['docs/connections/claude-code-connection.md', 'Claude Code connection'],
-    ['docs/connections/lightning-recipe-reference.md', 'Recipe SQL reference'],
+  ]],
+  ['Help and reference', [
+    ['docs/guides/troubleshooting.md', 'Troubleshooting'],
     ['docs/guides/zetaris-lightning-sql-commands.md', 'Lightning SQL commands'],
     ['docs/guides/zetaris-lightning-sql-companion.md', 'SQL gotchas and limits'],
   ]],
-  ['Explore more data', [
-    ['open_data/rest_apis/HOWTO.md', 'REST sources'],
-    ['open_data/rest_apis/rest-api-sources.md', 'REST source catalog'],
-    ['open_data/parquet_csv/HOWTO.md', 'File sources'],
-    ['open_data/parquet_csv/parquet-csv-data-sources.md', 'File source catalog'],
-    ['open_data/usl/HOWTO.md', 'Unified Semantic Layer'],
-    ['open_data/usl/usl-sources.md', 'USL model catalog'],
-    ['docs/guides/create-edgar-pudl-noaa-usl.md', 'EDGAR, PUDL and NOAA'],
+  ['Installation', [
+    ['docs/install/updated_zetaris_installation_guide.md', 'Install locally'],
+    ['docs/install/managed-aws-cluster-guide.md', 'Managed AWS cluster'],
+    ['docs/install/self-managed-ec2-installation-guide.md', 'Self-managed EC2 and Docker Compose'],
   ]],
 ];
 const pages = groups.flatMap(([, entries]) => entries);
 const routes = new Map(pages.map(([source]) => [source, source === 'START-HERE.md' ? 'index.html' : source.replace(/\.md$/, '.html')]));
-const journey = ['START-HERE.md', 'docs/connections/README.md', 'docs/guides/first-dataset.md', 'docs/guides/project-paths.md', 'docs/guides/demo-template.md'];
+const contentLinks = new Map(pages.map(([source]) => [source, new Set()]));
+const journey = ['START-HERE.md', 'docs/connections/README.md', 'docs/connections/lightning-recipe-reference.md', 'docs/guides/first-dataset.md', 'docs/guides/project-paths.md', 'docs/guides/demo-template.md'];
 const escape = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 const relative = (from, to) => path.posix.relative(path.posix.dirname(from), to);
 const encodePath = value => value.split('/').map(encodeURIComponent).join('/');
-const connectionGuide = readFileSync(path.join(root, 'docs/connections/codex-connection.md'), 'utf8');
+const connectionGuide = readFileSync(path.join(root, 'docs/connections/client-setup.md'), 'utf8');
 const prompts = {};
 for (const [protocol, section] of [['jdbc', '5. JDBC starter prompt'], ['rest', '6. REST starter prompt']]) {
   const text = connectionGuide.split(`## ${section}`)[1]?.match(/```text\n([\s\S]*?)\n```/)?.[1];
   if (!text || !text.startsWith('Read AGENTS.md')) throw new Error(`Missing ${protocol} starter prompt`);
-  prompts[protocol] = `Use the getting-started repository at ${github}/tree/${encodeURIComponent(revision)} as the workspace. If it is not checked out, help me clone and open it first. Read docs/connections/README.md for setup. Keep credentials in .env.local, never in this prompt or a report.\n\n${text.replace(/Goal: <[\s\S]*?>/, 'Goal: list the databases and available sources, then help me plan the minimal PokéAPI abilities recipe using my team names. Do not create objects yet.')}`;
+  prompts[protocol] = `Use the getting-started repository at ${github}/tree/${encodeURIComponent(revision)} as the workspace. If it is not checked out, help me clone and open it first. Read docs/connections/client-setup.md for setup. Keep credentials in .env.local, never in this prompt or a report.\n\n${text.replace(/Goal: <[\s\S]*?>/, 'Goal: verify SQL execution, inspect the supplied NY_TAXI and TPCDS_DB tables, then run a sample SELECT with LIMIT 5. Do not create objects.')}`;
 }
 const launchUrls = prompt => ({
   codex: `codex://threads/new?prompt=${encodeURIComponent(prompt)}`,
@@ -77,6 +85,7 @@ for (const [source, label] of pages) {
   const route = routes.get(source);
   const headings = [];
   const slugs = new Map();
+  let setupProtocol;
   const parser = new Marked({
     gfm: true,
     renderer: {
@@ -87,8 +96,9 @@ for (const [source, label] of pages) {
         const count = slugs.get(base) || 0;
         slugs.set(base, count + 1);
         const id = count ? `${base}-${count}` : base;
-        if (depth === 2 || depth === 3) headings.push({ depth, text, id });
-        return `<h${depth} id="${escape(id)}">${text}</h${depth}>\n`;
+        const display = source === 'docs/connections/client-setup.md' ? text.replace(/^\d+\. /, '') : text;
+        if (depth === 2 || depth === 3) headings.push({ depth, text: display, id, protocol: setupProtocol });
+        return `<h${depth} id="${escape(id)}">${display}</h${depth}>\n`;
       },
       table(token) {
         return `<div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable table">${Renderer.prototype.table.call(this, token)}</div>`;
@@ -103,6 +113,7 @@ for (const [source, label] of pages) {
       if (resolved.startsWith('../') || !existsSync(fullPath)) throw new Error(`${source}: missing link target ${token.href}`);
       const suffix = fragment ? `#${fragment}` : '';
       if (routes.has(resolved)) {
+        if (token.type === 'link' && resolved !== source) contentLinks.get(source).add(resolved);
         token.href = `${relative(route, routes.get(resolved))}${suffix}`;
       } else {
         const type = statSync(fullPath).isDirectory() ? 'tree' : 'blob';
@@ -110,17 +121,27 @@ for (const [source, label] of pages) {
       }
     },
   });
-  let content = parser.parse(readFileSync(path.join(root, source), 'utf8'));
-  if (source === 'START-HERE.md' || source === 'docs/connections/README.md') content += launcher;
-  if (source === 'docs/install/updated_zetaris_installation_guide.md') content = content.replace(/(?=<h2 id="6-)/, launcher);
+  const markdown = readFileSync(path.join(root, source), 'utf8');
+  let content;
+  if (source === 'docs/connections/client-setup.md') {
+    const [intro, jdbc, rest] = markdown.split(/<!-- protocol: (?:jdbc|rest) -->/);
+    if (!jdbc || !rest) throw new Error('Missing client setup protocol content');
+    content = parser.parse(intro);
+    content += '<div class="setup-switch" role="group" aria-label="Connection instructions"><button type="button" data-setup-choice="jdbc" aria-pressed="true">JDBC</button><button type="button" data-setup-choice="rest" aria-pressed="false">REST</button></div>';
+    for (const [protocol, guide] of [['jdbc', jdbc], ['rest', rest]]) {
+      setupProtocol = protocol;
+      content += `<section data-setup-protocol="${protocol}" aria-label="${protocol.toUpperCase()} instructions">${parser.parse(guide)}</section>`;
+    }
+  } else {
+    content = parser.parse(markdown);
+  }
+  if (source === 'START-HERE.md' || source === 'docs/connections/README.md' || source === 'docs/install/updated_zetaris_installation_guide.md') content += launcher;
   if (content.includes('class="assistant-launcher"')) {
     const entry = { depth: 2, text: 'Start with your coding assistant', id: 'assistant-heading' };
-    const nextSection = headings.findIndex(heading => heading.id.startsWith('6-'));
-    if (source === 'docs/install/updated_zetaris_installation_guide.md' && nextSection >= 0) headings.splice(nextSection, 0, entry);
-    else headings.push(entry);
+    headings.push(entry);
   }
   const nav = groups.map(([title, entries]) => `<div class="nav-group"><p>${escape(title)}</p>${entries.map(([file, text]) => `<a href="${relative(route, routes.get(file))}"${file === source ? ' aria-current="page"' : ''}>${escape(text)}</a>`).join('')}</div>`).join('');
-  const toc = headings.map(({ depth, text, id }) => `<a class="depth-${depth}" href="#${escape(id)}">${text}</a>`).join('');
+  const toc = headings.map(({ depth, text, id, protocol }) => `<a class="depth-${depth}" href="#${escape(id)}"${protocol ? ` data-setup-outline="${protocol}"` : ''}>${text}</a>`).join('');
   const position = journey.indexOf(source);
   const pager = position < 0 ? '' : `<nav class="pager" aria-label="Journey steps">${[position - 1, position + 1].map((index, side) => {
     if (!journey[index]) return '<span></span>';
@@ -157,4 +178,55 @@ for (const [source, label] of pages) {
   mkdirSync(path.dirname(path.join(output, route)), { recursive: true });
   writeFileSync(path.join(output, route), html);
 }
-console.log(`Built ${pages.length} documentation pages in ${output}`);
+// Preserve the original AWS guide URL for existing links and bookmarks.
+writeFileSync(path.join(output, 'docs/install/aws-installation-guide.html'), `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="0; url=managed-aws-cluster-guide.html">
+  <link rel="canonical" href="managed-aws-cluster-guide.html">
+  <title>Managed AWS cluster · Zetaris getting started</title>
+</head>
+<body><p>The AWS guide has moved to <a href="managed-aws-cluster-guide.html">Managed AWS cluster</a>.</p></body>
+</html>`);
+
+// Keep the local navigation graph outside the published site artifact.
+const graphDirectory = path.join(root, '.scratch');
+const nodeIds = new Map(pages.map(([source], index) => [source, `p${index}`]));
+const pageLabels = new Map(pages);
+const graph = [
+  '# Website navigation graph',
+  '',
+  'Generated from the current website sources by `npm run build --prefix website`. Do not edit this file by hand.',
+  '',
+  '## Page content links',
+  '',
+  'Arrows show links in page content, not a required reading order. Pages are grouped by sidebar section; repeated sidebar, header, footer and pager links are excluded here. Repeated links and links to different anchors on the same target page are combined. External URLs, unpublished repository files, images and same-page anchors are excluded.',
+  '',
+  `Pages: ${pages.length}. Directed content connections: ${[...contentLinks.values()].reduce((total, links) => total + links.size, 0)}.`,
+  '',
+  '```mermaid',
+  'flowchart LR',
+];
+for (const [index, [title, entries]] of groups.entries()) {
+  graph.push(`  subgraph g${index}[${JSON.stringify(title)}]`);
+  for (const [source, label] of entries) graph.push(`    ${nodeIds.get(source)}[${JSON.stringify(label)}]`);
+  graph.push('  end');
+}
+for (const [source, targets] of contentLinks) {
+  for (const target of pages.map(([file]) => file).filter(file => targets.has(file))) graph.push(`  ${nodeIds.get(source)} --> ${nodeIds.get(target)}`);
+}
+graph.push('```', '', '## Recommended beginner journey', '', 'These arrows show the forward Next step links in the journey pager. Previous step links return to the preceding page.', '', '```mermaid', 'flowchart LR');
+for (const source of journey) graph.push(`  ${nodeIds.get(source)}[${JSON.stringify(pageLabels.get(source))}]`);
+for (let index = 1; index < journey.length; index++) graph.push(`  ${nodeIds.get(journey[index - 1])} --> ${nodeIds.get(journey[index])}`);
+graph.push('```', '', '## Content links by page', '', 'Use this list to trace individual connections when the full graph is dense.', '', '| Page | Links to |', '|---|---|');
+for (const [source, label] of pages) {
+  const targets = pages.map(([file]) => file).filter(file => contentLinks.get(source).has(file));
+  graph.push(`| [${label}](../${source}) | ${targets.map(target => `[${pageLabels.get(target)}](../${target})`).join(', ') || 'None'} |`);
+}
+graph.push('', '## Sidebar sections', '', 'Grouping only; there are no repeated sidebar arrows in the content graph.', '');
+for (const [title, entries] of groups) graph.push(`- **${title}**: ${entries.map(([, label]) => label).join(', ')}.`);
+mkdirSync(graphDirectory, { recursive: true });
+writeFileSync(path.join(graphDirectory, 'website-navigation.md'), `${graph.join('\n')}\n`);
+console.log(`Built ${pages.length} documentation pages in ${output}; updated .scratch/website-navigation.md`);

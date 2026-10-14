@@ -1,46 +1,47 @@
 # Troubleshooting
 
-Find your error below. For detailed SQL limits, see the [SQL companion](zetaris-lightning-sql-companion.md).
+Find your error below. For SQL limitations, see the [SQL companion](zetaris-lightning-sql-companion.md).
 
 ## What went wrong?
 
 | Problem | What to try |
 |---|---|
-| Missing URL, account or driver | For a local install, use the [Run locally page](https://cloud.enterprise.zetaris.com/dashboard/download). For an existing instance, use your supplied connection details. You can use SQL Editor without a JDBC driver. See [connection options](../connections/README.md). |
+| Missing URL, account or driver | For a local install, use the [Run locally page](https://cloud.enterprise.zetaris.com/dashboard/download). For an existing instance, use the supplied connection details. SQL Editor needs no JDBC; see [connection options](../connections/README.md). |
 | Local install won't start | Run `preflight.sh` from the platform bundle and follow the [install guide](../install/updated_zetaris_installation_guide.md). Check registry access, memory, disk and configuration. |
-| Login fails or HTTP 401 | Check your URL and credentials. Editing the platform's `.env` after setup doesn't reset an existing account. |
-| Permission error or HTTP 403 | Check that your organisation, team names and account permissions match the requested operation. Use your own account. |
-| Missing or invalid org ID | Follow [HTTP setup](../../scripts/HOWTO.md#find-your-organization-id). Use your actual numeric ID. SQL Editor doesn't need this setting. |
-| HTTP 404 or an HTML response | Check that the UI URL supports the helper's proxy routes. The raw API port isn't a substitute. |
-| JDBC won't connect | Check the driver JAR, driver class, Java and endpoint. On a remote agent, `localhost` points to the agent's machine. |
-| Object already exists | Check its owner and definition. Reuse your matching objects, or ask for a new team name. |
-| Table created but no rows returned | Check the source path, response, schema and Zetaris's access to the source. Try a small SELECT before adding more tables. |
-| HTTP 429 | Wait as instructed by the source. Avoid repeated queries; REST views may fetch the source each time. Check the recipe's cache guidance. |
-| HTTP 502 or 429 | Check the source error. A 429 means the source's rate limit was hit (company_dns is rate limited): wait 60 seconds and retry that one statement, and cache the table (`CACHE TABLE`) so later queries do not re-fetch. A 502 on a first request can be a cold start: retry once. Report repeated failures. |
-| PUDL registration fails | It's a [known issue](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md). Use PokéAPI for the starter. |
-| A downloaded file won't query | Put it in storage Zetaris can reach, then register it. A file on your laptop may be out of reach. |
-| Chart won't read the result | Compare the real query response with the example's expected format. Check for an error response first. |
+| Login fails or HTTP 401 | Check the URL and credentials. Changing the platform's `.env` after setup does not reset an account. |
+| REST preflight says `Operation not permitted` for localhost | The command environment may have blocked local network access before Zetaris returned an HTTP response. In Codex, retry the read-only command with the requested network or elevated execution permission if offered. Do not change the API URL or key based on this error. If permission is unavailable, run the command in a terminal that can reach the instance. |
+| Permission error or HTTP 403 | Check your organisation, team names and account permissions. Use your own account. |
+| Missing or invalid org ID | Follow [HTTP setup](../../scripts/HOWTO.md#find-your-organization-id) and use your numeric ID. SQL Editor does not need this setting. |
+| HTTP 404 or an HTML response | Use the UI URL that supports the helper's proxy routes. The raw API port does not. |
+| JDBC won't connect | Check the driver JAR, class, Java and endpoint. On a remote agent, `localhost` is that machine. |
+| Object already exists | Check its owner and definition. Reuse a match; otherwise use your assigned team name. |
+| Table created but no rows returned | Check the source path, response, schema and Zetaris access. Start with a small `SELECT`. |
+| HTTP 429 | Wait as the source instructs. For `company_dns`, wait 60 seconds and retry that one statement. Space endpoint calls by at least 15 seconds and cache the raw table. Avoid retry loops; one statement can trigger several requests. |
+| HTTP 502 | Check the source error and retry once if appropriate. `company_dns` has moved hosts and no longer uses the removed warm-up helper. On rate-limited sources, wait before another attempt. Report repeated failures. |
+| PUDL registration fails | PUDL has a [known issue](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md). Use the PokéAPI starter. |
+| A downloaded file won't query | Put it in storage Zetaris can reach. A file on your laptop may be out of reach. |
+| Chart won't read the result | Check the query response shape and look for an error before comparing it with the example. |
 
 ## Reruns and team isolation
 
-On the shared instance, use your assigned team names and permissions. Names help avoid clashes; permissions control access.
+On the shared instance, use your assigned team names. Names help avoid clashes; permissions control access.
 
-1. Copy the SQL and replace all database, container, namespace, model and reference names consistently.
+1. Replace all database, container, namespace, model and reference names consistently.
 2. Check existing objects before creating them. See the [recipe reference](../connections/lightning-recipe-reference.md).
-3. Reuse shared sources only with confirmed definitions and read permission.
-4. Run one complete statement at a time. If one fails, fix it and continue from there. Earlier commands may already have created objects.
-5. Cache, change or remove only your own approved objects.
+3. Reuse shared sources only when their definitions and your read permission are confirmed.
+4. Run one complete statement at a time. If one fails, fix it and continue; earlier statements may have created objects.
+5. Cache, change or remove only objects you own and are allowed to change.
 
-`run_sql.py --skip-exists` skips duplicate errors. It doesn't check that the existing objects match your recipe. `CREATE SCHEMASTORE CONTAINER` doesn't support `IF NOT EXISTS` in the recorded run, and this repo has no container-removal command. Check before creating another container.
+`run_sql.py --skip-exists` skips duplicate errors. It does not check that an existing object matches your recipe. `CREATE SCHEMASTORE CONTAINER` has no `IF NOT EXISTS`; check before creating another container. See the [SQL companion](zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses) for the tested cleanup scope.
 
 ## Cleanup
 
-Follow the recipe's cleanup notes. Remove only objects you own and have permission to remove.
+Remove only objects you own and have permission to remove. Do not stop or reset the shared platform. For your local install, follow the installation guide's shutdown steps.
 
-`DROP VIEW` has worked in recorded tests. Removing REST/file registrations through SQL has been inconsistent; use Data Explorer's **File Source & API** panel for those. See the [SQL companion](zetaris-lightning-sql-companion.md) for details.
+On 12 October 2026, Zetaris 2.4.3.1 let `DROP LIGHTNING DATABASE TABLE` remove `reason` (public S3 filestore) and `ability` (PokéAPI REST); `DROP LIGHTNING DATABASE` then removed their test database. This covers only these fixtures. The check deleted an empty SchemaStore container through the documented API after `viewCount=0`; no SQL container-drop form was tested. Use Data Explorer's **File Source & API** panel for other registrations. See the [SQL companion](zetaris-lightning-sql-companion.md) for full scope.
 
-Only drop a namespace if you're allowed to remove everything it contains. Don't stop or reset the shared platform. For your own local install, follow the installation guide's shutdown steps.
+Only drop a namespace if you may remove everything it contains.
 
 ## Record the error
 
-Include the tool you're using, failed step, time, error message and last step that worked. Say whether you could log in, run SQL and query source rows. Remove passwords, tokens, Authorization headers and unrelated customer data before sharing anything.
+Report the tool, failed step, time, error and last step that worked. State whether login, SQL and source queries worked. Remove passwords, tokens, Authorization headers and unrelated customer data.

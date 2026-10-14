@@ -1,24 +1,25 @@
-# Available recipes
+# Cookbooks
 
-Start with [PokéAPI](first-dataset.md), then choose another source that fits your project. A recipe marked verified worked in a recorded run. Check it on your instance too.
+Choose a task and follow its cookbook. Verified means it worked in a recorded run; check it on your instance too.
 
 ## Start small
 
-| Source | Try first | Add later |
+| Task | Cookbook | What you need |
 |---|---|---|
-| PokéAPI | Pikachu's abilities. See the [test record](../install/zetaris-installation-test-record.md). | Types, stats, Charizard and union views |
+| Query the supplied NY Taxi and TPCDS tables | [First SQL commands](../connections/lightning-recipe-reference.md) | Login and query permission |
+| Connect PokéAPI and find Pikachu's abilities | [PokéAPI cookbook](first-dataset.md) | Creation permission, team names and API access from Zetaris |
 
 Use your assigned team names on the shared instance.
 
 ## Find a recipe
 
-- [REST sources](../../open_data/rest_apis/rest-api-sources.md): nine of the 11 recipes are marked verified. NASA DONKI is unverified; Singapore PM2.5 is known to fail.
-- [File sources](../../open_data/parquet_csv/parquet-csv-data-sources.md): NOAA and AWS Public Blockchain are active. Five other recipes, including PUDL, are known to fail. Licence colours don't tell you whether a query works.
-- [USL models](../../open_data/usl/HOWTO.md): SIC and SIC/EDGAR setup steps have been checked. The guides also record a foreign-key data-quality failure and open questions about materialisation.
+- [REST cookbook](../../open_data/rest_apis/HOWTO.md): connect, flatten and query API data, including SIC industry classifications. The [REST catalog](../../open_data/rest_apis/rest-api-sources.md) records readiness; NASA DONKI is unverified and Singapore PM2.5 is known to fail.
+- [File cookbook](../../open_data/parquet_csv/HOWTO.md): register and query files such as NOAA weather and AWS Public Blockchain. Check the [file catalog](../../open_data/parquet_csv/parquet-csv-data-sources.md) for failures, size and licensing.
+- [USL cookbook](../../open_data/usl/HOWTO.md): build SIC and SIC/EDGAR models. The [model catalog](../../open_data/usl/usl-sources.md) records a foreign-key data-quality failure and open materialisation questions.
 
-Check the source's size, rate limits, licence and setup steps before running it. Choose one source at a time.
+Check size, rate limits, licence and setup before adding each source.
 
-Use `python3 scripts/onboard.py --list` to see recipe IDs, and `plan <id>` to see dependencies. Preview with `--dry-run` before creating objects. See [client scripts](../../scripts/HOWTO.md).
+Using scripts? See [client scripts](../../scripts/HOWTO.md) for recipe IDs, dependency planning and a dry-run before creating objects.
 
 ## Leave these for later
 
@@ -32,8 +33,8 @@ Use `python3 scripts/onboard.py --list` to see recipe IDs, and `plan <id>` to se
 | Kafka | Ingestion still needs checking |
 | SQL databases, logs, PDFs and other planned recipes | Not ready for onboarding |
 
-The runner needs an explicit override for known-to-fail recipes. That doesn't fix the source. The [roadmap](../plans/FUTURES.md) lists future work.
+Known-to-fail recipes require an explicit runner override; they remain failures. See the [roadmap](../plans/FUTURES.md) for planned work.
 
 ## If a source fails
 
-Check [troubleshooting](troubleshooting.md). If PokéAPI fails, fix the connection or choose another verified REST source and follow its setup steps. PUDL is currently blocked, so use another source. Keep failures visible in your demo notes.
+Use [troubleshooting](troubleshooting.md) before retrying. If a source is blocked, choose another verified recipe. Record unresolved failures in your demo notes.

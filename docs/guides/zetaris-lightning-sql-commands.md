@@ -1,6 +1,26 @@
 # Lightning Command Reference
 
+## Start with the supplied samples
+
+Start with [your first SQL commands](../connections/lightning-recipe-reference.md), using the supplied `NY_TAXI` and `TPCDS_DB` samples.
+
+| Stage | Commands to learn | Prerequisites |
+|---|---|---|
+| Check execution | `SELECT 1`, `SHOW SERVER VERSION` | Login and query permission |
+| Discover sources | `SHOW LIGHTNING DATABASES`, `SHOW DATASOURCES` | Login; results are limited to your access |
+| Inspect sample tables | `SHOW LIGHTNING TABLES`, `DESCRIBE DATASOURCE TABLE` | Access to the supplied NY Taxi or TPCDS tables |
+| Read sample data | `SELECT ... LIMIT 5` | Query permission on an existing table |
+| Create views and connect more data | SchemaStore, file, REST and datasource commands | Creation permission, your own object names and the source-specific setup below |
+| Build models and pipelines | USL, DQ, pipeline and data-mart commands | Accessible source data and the required namespaces or containers |
+| Manage storage, access and cleanup | Export, cache, grant, revoke and drop commands | Writable storage or management permission, with a confirmed scope |
+
+Empty discovery lists are valid. Use `SHOW DATASOURCES` for external database connections and `SHOW LIGHTNING DATABASES` for file/REST sources.
+
+Read each group's prerequisites and each command's privileges. The sections group commands by topic, not execution order.
+
 ## Contents
+
+[Start with the supplied samples](#start-with-the-supplied-samples)
 
 1. [Introduction](#1-introduction)
 2. [Conventions](#2-conventions)
@@ -28,11 +48,11 @@
 
 ## 1. Introduction
 
-Lightning commands are SQL extensions provided by the Zetaris platform for connecting data sources, building semantic models, maintaining data quality and managing access.
+Lightning commands connect sources, build models, check data quality and manage access.
 
-Most of these functions are available through the platform user interface, and the interface is the recommended way to use them. This reference is intended for cases where a task is more convenient to perform in SQL, or where a function is not exposed in the interface. All commands in this reference are run in the SQL Workspace, alongside standard Spark SQL statements.
+Use the platform UI or run these commands in SQL Workspace alongside ordinary SQL queries.
 
-This reference describes the 144 Lightning commands available to Datathon participants.
+This reference contains 144 Lightning commands.
 
 ## 2. Conventions
 
@@ -45,18 +65,18 @@ This reference describes the 144 Lightning commands available to Datathon partic
 | `<name>`           | A value supplied by the user.                                             |
 | `'<text>'`         | A value supplied as a quoted string. Single or double quotes may be used. |
 | `[ … ]`            | An optional element.                                                      |
-| `{ A               | B }`                                                                      |
+| `{ A \| B }` | Choose one alternative. |
 | `…`                | The preceding element may be repeated.                                    |
 | `(key 'value', …)` | An option list of key and quoted value pairs, separated by commas.        |
 
 
 ### 2.2 Entry format
 
-Each command entry contains the following sections: **Syntax**, **Description**, **Privileges**, **Limitations** (where applicable), **Remarks** (where applicable) and **Example**.
+Each entry gives syntax, a description, privileges, any limitations or notes, and an example.
 
 ### 2.3 Example objects
 
-Examples refer to the following objects, which are illustrative only.
+Examples use the objects below. Create the required objects and replace names with your team names. Hosts, credentials and incomplete JSON are placeholders. The starter guide uses already-registered `NY_TAXI` and `TPCDS_DB` samples.
 
 
 | Object                         | Description                                                                                    |
@@ -84,6 +104,10 @@ Examples refer to the following objects, which are illustrative only.
 
 A datasource is a registered connection to an external database. Registering a datasource stores the connection only; its tables become available after they are imported.
 
+**Prerequisites**
+
+Creating or inspecting an unregistered datasource needs a reachable database, driver and source credentials. Import, preview and metadata changes need a registered datasource. The client JDBC connection to Zetaris is separate. `SHOW DATASOURCES` needs no registration.
+
 ### 4.1 CREATE DATASOURCE
 
 **Syntax**
@@ -92,13 +116,9 @@ A datasource is a registered connection to an external database. Registering a d
 CREATE DATASOURCE <name> [DESCRIBE BY '<desc>'] OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Registers an external source (JDBC, Cassandra, MongoDB or DynamoDB, detected from the options) after testing the connection.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -120,13 +140,9 @@ CREATE DATASOURCE crm_pg DESCRIBE BY "PostgreSQL" OPTIONS (
 REGISTER DATASOURCE TABLE '<table>' FROM <datasource>
 ```
 
-**Description**
-
 Imports one source table's metadata into a datasource.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -142,13 +158,9 @@ REGISTER DATASOURCE TABLE "customers" FROM crm_pg
 REGISTER DATASOURCE TABLES [('<table>', …)] FROM <datasource>
 ```
 
-**Description**
-
 Imports the listed source tables, or every table when no list is given.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -164,13 +176,9 @@ REGISTER DATASOURCE TABLES FROM crm_pg
 CREATE DATASOURCE VIEW <view> FROM <datasource> AS <SELECT query …>
 ```
 
-**Description**
-
 Creates or replaces a datasource view from native SQL that runs on the source.
 
-**Privileges**
-
-Administrators, or users granted the Query Builder Write permission.
+**Privileges:** Administrators or Query Builder Write users.
 
 **Example**
 
@@ -186,13 +194,9 @@ CREATE DATASOURCE VIEW au_customers FROM crm_pg AS SELECT * FROM customers WHERE
 SHOW DATASOURCES
 ```
 
-**Description**
+Lists accessible datasources: name, description and id.
 
-Lists the datasources you can see: name, description, id.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -209,13 +213,9 @@ SHOW DATASOURCE TABLES [<datasource>]
 SHOW DATASOURCE TABLES <datasource> WITH STATISTICS
 ```
 
-**Description**
-
 Lists a datasource's tables and views; WITH STATISTICS adds row counts, size and tags.
 
-**Privileges**
-
-Depends on the form: any user; Data Catalog Read, Data Catalog Write.
+**Privileges:** Depends on the form: any user; Data Catalog Read, Data Catalog Write.
 
 **Limitations**
 
@@ -239,13 +239,9 @@ SHOW DATASOURCE TABLES crm_pg
 PREVIEW DATASOURCE SQL <datasource> AS <SELECT query …>
 ```
 
-**Description**
-
 Runs native SQL on a datasource and returns up to 10 rows.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -261,13 +257,9 @@ PREVIEW DATASOURCE SQL crm_pg AS SELECT id, full_name FROM customers WHERE count
 LIST DATABASE TABLES OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Connects with inline options and lists an unregistered source's tables, columns, types and keys.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Limitations**
 
@@ -292,13 +284,9 @@ LIST DATABASE TABLES OPTIONS (
 DESCRIBE DATASOURCE TABLE <datasource>.<table>
 ```
 
-**Description**
-
 Describes a table's columns with type, comment, description and tags (datasource, file, REST, Hive or Glue).
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Limitations**
 
@@ -318,13 +306,9 @@ DESCRIBE DATASOURCE TABLE crm_pg.customers
 REFRESH DATASOURCE TABLES FROM <datasource>
 ```
 
-**Description**
-
 Re-imports metadata for a datasource's registered tables.
 
-**Privileges**
-
-Administrators, or users granted the Data Catalog Write permission.
+**Privileges:** Administrators or Data Catalog Write users.
 
 **Example**
 
@@ -340,13 +324,9 @@ REFRESH DATASOURCE TABLES FROM crm_pg
 UNCACHE DATASOURCE <name>
 ```
 
-**Description**
-
 Clears a datasource's cached table metadata and statistics, then reloads Presto catalogs.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -362,13 +342,9 @@ UNCACHE DATASOURCE crm_pg
 UPDATE DATASOURCE SCHEMA [<datasource>]
 ```
 
-**Description**
-
 Re-imports table metadata for one datasource, or for every datasource you can access.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -384,13 +360,9 @@ UPDATE DATASOURCE SCHEMA crm_pg
 DROP DATASOURCE VIEW <view> FROM <datasource>
 ```
 
-**Description**
-
 Deletes a datasource view.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -406,23 +378,23 @@ DROP DATASOURCE VIEW au_customers FROM crm_pg
 DROP DATASOURCE <name>
 ```
 
-**Description**
-
 Deregisters a datasource with its tables, cache, search-index entries and privileges.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
 ```sql
-DROP DATASOURCE VIEW au_customers FROM crm_pg
+DROP DATASOURCE crm_pg
 ```
 
 ## 5. File Sources
 
 A file source is a Lightning database whose tables are defined over files in S3, Azure Blob Storage, Google Cloud Storage, HDFS or platform storage.
+
+**Prerequisites**
+
+Query the supplied samples with source access. New file tables need creation permission, a readable path and any storage credentials; persistent tables also need a Lightning database. Update, uncache and drop need an existing object.
 
 ### 5.1 CREATE FILESTORE SESSION TABLE
 
@@ -432,13 +404,9 @@ A file source is a Lightning database whose tables are defined over files in S3,
 CREATE FILESTORE SESSION TABLE <table> FORMAT <format> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Defines a temporary file-backed table, readable as `session.<table>` until restart or DROP TABLE.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -466,13 +434,9 @@ SELECT * FROM session.tx_preview LIMIT 20
 CREATE LIGHTNING DATABASE <name> [DESCRIBE BY '<desc>'] [OPTIONS (key 'value', …)]
 ```
 
-**Description**
-
 Creates a Lightning database, the container for file-store and REST tables.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -492,13 +456,9 @@ CREATE LIGHTNING DATABASE sales_files DESCRIBE BY "Sales files"
 CREATE LIGHTNING FILESTORE TABLE <table> FROM <database> FORMAT <format> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Registers a file table (CSV, Parquet, JSON, Delta, PDF, images and more) with the schema inferred from the path.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -526,13 +486,9 @@ SELECT * FROM sales_files.transactions LIMIT 20
 SHOW LIGHTNING DATABASES
 ```
 
-**Description**
+Lists accessible Lightning databases: name, description and id.
 
-Lists the Lightning databases you can see: name, description, id.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -548,13 +504,9 @@ SHOW LIGHTNING DATABASES
 SHOW LIGHTNING TABLES <database>
 ```
 
-**Description**
-
 Lists a Lightning database's tables with type, path or endpoint, format and id.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Limitations**
 
@@ -574,13 +526,9 @@ SHOW LIGHTNING TABLES sales_files
 LIST HDFS FILES '<dir>' OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Lists files and folders under an HDFS, S3, Azure or local path, using the credentials you pass.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -600,13 +548,9 @@ LIST HDFS FILES "s3a://datathon-bucket/sales/" OPTIONS (
 UNCACHE LIGHTNING FILESTORE TABLE <table> FROM <database>
 ```
 
-**Description**
-
 Clears a file-store table's cached metadata and dependent caches, then reloads Presto catalogs.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -622,13 +566,9 @@ UNCACHE LIGHTNING FILESTORE TABLE transactions FROM sales_files
 UPDATE LIGHTNING FILESTORE TABLE <table> FROM <database> OPTIONS (key 'value', …)
 ```
 
-**Description**
+Updates a file-store table's stored options; changing the path is rejected. Include the original `path` in OPTIONS even when updating other settings. On Zetaris 2.4.3.1, an update without it returned `Path is not provided` in the 12 October 2026 live check.
 
-Updates a file-store table's stored options; changing the path is rejected.
-
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -648,13 +588,9 @@ UPDATE LIGHTNING FILESTORE TABLE transactions FROM sales_files OPTIONS (
 DROP LIGHTNING DATABASE TABLE <database>.<table>
 ```
 
-**Description**
-
 Removes a file-store or REST table from a Lightning database.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Limitations**
 
@@ -674,23 +610,23 @@ DROP LIGHTNING DATABASE TABLE sales_files.transactions
 DROP LIGHTNING DATABASE <database>
 ```
 
-**Description**
-
 Deletes a Lightning database with its tables and privileges.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
 ```sql
-DROP LIGHTNING DATABASE TABLE sales_files.transactions
+DROP LIGHTNING DATABASE sales_files
 ```
 
 ## 6. REST Sources and Authentication
 
 A REST table exposes the JSON response of an HTTP endpoint as a table. Saved token requests (auth definitions) supply access tokens to REST tables.
+
+**Prerequisites**
+
+REST requests need an endpoint reachable from Zetaris and any required authentication. Persistent tables need a Lightning database and creation permission. Saved AUTH operations need a definition; token requests need the token endpoint and credentials. `LIST AUTH` may be empty.
 
 ### 6.1 CREATE REST SESSION TABLE
 
@@ -700,13 +636,9 @@ A REST table exposes the JSON response of an HTTP endpoint as a table. Saved tok
 CREATE REST SESSION TABLE <table> REQUEST (key 'value', …) HEADER (key 'value', …) BODY (key 'value', …) [AUTH BY <auth>[, …]]
 ```
 
-**Description**
-
 Calls a REST endpoint and holds the result as temporary table `session.<table>`.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -734,13 +666,9 @@ SELECT * FROM session.weather_preview
 CREATE LIGHTNING REST TABLE <table> FROM <database> REQUEST (key 'value', …) HEADER (key 'value', …) BODY (key 'value', …) [AUTH BY <auth>[, …]]
 ```
 
-**Description**
+Registers a REST table by calling its endpoint and inferring the JSON schema. AUTH BY is optional.
 
-Registers a REST table: calls the endpoint (optionally through AUTH BY) and infers the JSON schema.
-
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -766,13 +694,9 @@ CREATE LIGHTNING REST TABLE daily_weather FROM weather_api REQUEST (
 UPSERT AUTH <auth> REQUEST (key 'value', …) HEADER (key 'value', …) BODY (key 'value', …)
 ```
 
-**Description**
-
 Creates or updates a named token-request definition: endpoint, method, headers and body.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -797,13 +721,9 @@ UPSERT AUTH weather_oauth REQUEST (
 TEST AUTH REQUEST (key 'value', …) HEADER (key 'value', …) BODY (key 'value', …)
 ```
 
-**Description**
-
 Runs an ad-hoc token request and returns the response fields.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -828,13 +748,9 @@ TEST AUTH REQUEST (
 TEST AUTH <auth>
 ```
 
-**Description**
-
 Runs a saved token-request definition and returns the response fields.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -850,13 +766,9 @@ TEST AUTH weather_oauth
 TEST REST REQUEST (key 'value', …) HEADER (key 'value', …) BODY (key 'value', …) [AUTH BY <auth>[, …]]
 ```
 
-**Description**
-
 Runs a REST request, optionally authorised by saved AUTH definitions, and returns the rows.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -878,13 +790,9 @@ TEST REST REQUEST (
 SHOW AUTH <auth>
 ```
 
-**Description**
-
 Shows a saved token-request definition, including its header and body values.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -900,13 +808,9 @@ SHOW AUTH weather_oauth
 LIST AUTH
 ```
 
-**Description**
-
 Lists saved token-request definitions: name, endpoint, method, encoding, content type.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -922,13 +826,9 @@ LIST AUTH
 DROP AUTH <auth>
 ```
 
-**Description**
-
 Deletes a saved token-request definition.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -939,6 +839,10 @@ DROP AUTH weather_oauth
 ## 7. Streaming
 
 Streaming sources read JSON messages from a Kafka topic. Aggregation tables run a continuous query over a streaming source and write the result to storage.
+
+**Prerequisites**
+
+Registering a stream needs Kafka broker/topic access, a sample JSON message and creation permission. An aggregation also needs writable output storage. Aggregation listing/removal needs its registered source.
 
 ### 7.1 REGISTER STREAMING DATASOURCE
 
@@ -952,13 +856,9 @@ INPUT_OPTIONS (key 'value', …)
 INPUT_SAMPLE <sample message>
 ```
 
-**Description**
-
 Registers a Kafka topic as a streaming source; the schema comes from INPUT_SAMPLE.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Limitations**
 
@@ -998,13 +898,9 @@ OUTPUT_OPTIONS (key 'value', …)
 AS <SELECT query>
 ```
 
-**Description**
-
 Starts a streaming query over a source and writes the result to Parquet, ORC, CSV or JDBC.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Limitations**
 
@@ -1032,13 +928,9 @@ AS SELECT user_id, page, from_unixtime(ts) AS clicked_at FROM clickstream WHERE 
 SHOW STREAMING DATASOURCE
 ```
 
-**Description**
-
 Lists the streaming sources you can see: name, input, format, schema.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1054,13 +946,9 @@ SHOW STREAMING DATASOURCE
 SHOW STREAMING AGGREGATION TABLES <source>
 ```
 
-**Description**
-
 Lists a streaming source's aggregation tables: output mode, format, schema, query.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1076,13 +964,9 @@ SHOW STREAMING AGGREGATION TABLES clickstream
 DROP STREAMING DATASOURCE <source>
 ```
 
-**Description**
-
 Stops and deletes a streaming source, and revokes its privileges.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1098,13 +982,9 @@ DROP STREAMING DATASOURCE clickstream
 DROP STREAMING AGGREGATION TABLE <source>.<table>
 ```
 
-**Description**
-
 Stops and deletes aggregation table `<source>.<table>`.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1116,6 +996,10 @@ DROP STREAMING AGGREGATION TABLE clickstream.pricing_clicks
 
 A data lake is an Iceberg lakehouse registered on object or file storage.
 
+**Prerequisites**
+
+Creation needs accessible Iceberg storage, connection settings and creation permission. Table listing needs a registered lake. `RELOAD DATALAKE` affects all engine catalogs; confirm that scope first.
+
 ### 8.1 CREATE DATALAKE
 
 **Syntax**
@@ -1124,13 +1008,9 @@ A data lake is an Iceberg lakehouse registered on object or file storage.
 CREATE DATALAKE <name> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Registers an Iceberg data lake on S3, Azure, GCS, HDFS or local storage after checking the path.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1151,13 +1031,9 @@ CREATE DATALAKE datathon_lake OPTIONS (
 SHOW DATALAKES
 ```
 
-**Description**
+Lists accessible data lakes.
 
-Lists the data lakes you can see.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1173,13 +1049,9 @@ SHOW DATALAKES
 SHOW DATALAKE TABLES <database>
 ```
 
-**Description**
-
 Lists a data lake's Iceberg tables.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Remarks**
 
@@ -1199,13 +1071,9 @@ SHOW DATALAKE TABLES datathon_lake
 RELOAD DATALAKE
 ```
 
-**Description**
-
 Tells every Presto engine to reload its catalogs and drops cached Spark catalogs.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1221,6 +1089,10 @@ RELOAD DATALAKE
 
 External catalogs connect a Unity Catalog server under a local alias.
 
+**Prerequisites**
+
+Registration needs Unity Catalog server access, authentication, an existing catalog and creation permission. Namespace/table commands need an accessible registered catalog. `SHOW UNITY CATALOG` needs no registration.
+
 ### 9.1 REGISTER UNITY CATALOG
 
 **Syntax**
@@ -1229,13 +1101,9 @@ External catalogs connect a Unity Catalog server under a local alias.
 REGISTER UNITY CATALOG <alias> NAME <catalog> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Registers a Unity Catalog under an alias after checking the catalog exists on the server.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1260,13 +1128,9 @@ REGISTER UNITY CATALOG uc_demo NAME main OPTIONS (
 SHOW UNITY CATALOG
 ```
 
-**Description**
-
 Lists registered Unity Catalogs: alias, name, masked options, schema count.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1282,13 +1146,9 @@ SHOW UNITY CATALOG
 SHOW UC NAMESPACES IN <alias>[.<namespace> …]
 ```
 
-**Description**
-
 Lists a Unity Catalog's schemas with child counts, filtered to what you can access.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Remarks**
 
@@ -1308,13 +1168,9 @@ SHOW UC NAMESPACES IN uc_demo
 SHOW UC TABLES IN <alias>.<namespace>[.<namespace> …]
 ```
 
-**Description**
-
 Lists the tables in a Unity Catalog schema.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Remarks**
 
@@ -1335,13 +1191,9 @@ SHOW UC TABLES IN uc_demo.default
 UNCACHE UNITY CATALOG <name>
 ```
 
-**Description**
-
 Evicts a Unity Catalog connection from the driver cache so it reloads.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1357,13 +1209,9 @@ UNCACHE UNITY CATALOG uc_demo
 DROP UNITY CATALOG <alias>
 ```
 
-**Description**
-
 Removes a Unity Catalog registration and unloads it.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1375,6 +1223,10 @@ DROP UNITY CATALOG uc_demo
 
 A Hive metastore registration synchronises database and table metadata from an existing Hive metastore database.
 
+**Prerequisites**
+
+Registration/remote listing needs Hive metastore access, its JDBC driver and credentials. Named listing/removal needs a registered metastore or synced database. `LIST HIVE METASTORES` may be empty.
+
 ### 10.1 REGISTER HIVE METASTORE
 
 **Syntax**
@@ -1383,13 +1235,9 @@ A Hive metastore registration synchronises database and table metadata from an e
 REGISTER HIVE METASTORE <name> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Registers a Hive metastore (JDBC to its database) and syncs the listed databases.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1415,13 +1263,9 @@ REGISTER HIVE METASTORE hive_prod OPTIONS (
 LIST HIVE METASTORES
 ```
 
-**Description**
+Lists accessible Hive metastores.
 
-Lists the registered Hive metastores you can see.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1437,13 +1281,9 @@ LIST HIVE METASTORES
 LIST HIVE METASTORE TABLES REMOTE OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Lists live tables for the databases named in OPTIONS, over an inline connection.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1470,13 +1310,9 @@ LIST HIVE METASTORE TABLES REMOTE OPTIONS (
 LIST HIVE METASTORE DATABASES <metastore>
 ```
 
-**Description**
-
 Lists the synced databases of a Hive metastore.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1492,13 +1328,9 @@ LIST HIVE METASTORE DATABASES hive_prod
 SHOW HIVE METASTORE DATABASES OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Lists live Hive databases from inline connection options.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1523,15 +1355,19 @@ SHOW HIVE METASTORE DATABASES OPTIONS (
 LIST HIVE METASTORE TABLES <source>.<table> [OPTIONS (key 'value', …)]
 ```
 
-**Description**
-
 Lists synced tables of `<metastore>.<db>`; with OPTIONS it lists live tables instead.
 
-**Privileges**
-
-Depends on the form: any user; admins only.
+**Privileges:** Depends on the form: any user; admins only.
 
 **Example**
+
+For a registered metastore:
+
+```sql
+LIST HIVE METASTORE TABLES hive_prod.sales
+```
+
+For a remote connection with inline options:
 
 ```sql
 LIST HIVE METASTORE TABLES REMOTE OPTIONS (
@@ -1551,13 +1387,9 @@ LIST HIVE METASTORE TABLES REMOTE OPTIONS (
 DROP HIVE METASTORE <source>.<table>
 ```
 
-**Description**
-
 Deletes a registered Hive metastore (`<metastore>`) or one synced database (`<metastore>.<db>`).
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1569,6 +1401,10 @@ DROP HIVE METASTORE hive_prod
 
 An AWS Glue metastore registration synchronises database and table metadata from AWS Glue.
 
+**Prerequisites**
+
+Registration/remote listing needs a region, Glue catalog/database and authorised AWS authentication. Named listing/removal needs a registered metastore or synced database. `LIST AWS GLUE METASTORES` may be empty.
+
 ### 11.1 REGISTER AWS GLUE METASTORE
 
 **Syntax**
@@ -1577,13 +1413,9 @@ An AWS Glue metastore registration synchronises database and table metadata from
 REGISTER AWS GLUE METASTORE <name> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Registers an AWS Glue catalog (region, databases, optional keys and prefix) and syncs its metadata.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1608,13 +1440,9 @@ REGISTER AWS GLUE METASTORE glue_prod OPTIONS (
 LIST AWS GLUE METASTORES
 ```
 
-**Description**
+Lists accessible Glue metastores.
 
-Lists the registered Glue metastores you can see.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1630,13 +1458,9 @@ LIST AWS GLUE METASTORES
 LIST AWS GLUE METASTORE DATABASES REMOTE OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Lists live Glue databases from inline options.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1661,15 +1485,19 @@ LIST AWS GLUE METASTORE DATABASES REMOTE OPTIONS (
 LIST AWS GLUE METASTORE DATABASES {OPTIONS (key 'value', …) | <metastore>}
 ```
 
-**Description**
-
 With a name, lists synced databases; with OPTIONS, lists live ones.
 
-**Privileges**
-
-Depends on the form: admins only; any user.
+**Privileges:** Depends on the form: admins only; any user.
 
 **Example**
+
+For a registered metastore:
+
+```sql
+LIST AWS GLUE METASTORE DATABASES glue_prod
+```
+
+For a remote connection with inline options:
 
 ```sql
 LIST AWS GLUE METASTORE DATABASES REMOTE OPTIONS (
@@ -1688,13 +1516,9 @@ LIST AWS GLUE METASTORE DATABASES REMOTE OPTIONS (
 LIST AWS GLUE METASTORE TABLES REMOTE OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Lists live tables for the databases in OPTIONS `original_names`, over an inline connection.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1721,15 +1545,19 @@ LIST AWS GLUE METASTORE TABLES REMOTE OPTIONS (
 LIST AWS GLUE METASTORE TABLES <source>.<table> [OPTIONS (key 'value', …)]
 ```
 
-**Description**
-
 Lists synced tables of `<metastore>.<db>`; with OPTIONS it lists live tables instead.
 
-**Privileges**
-
-Depends on the form: any user; admins only.
+**Privileges:** Depends on the form: any user; admins only.
 
 **Example**
+
+For a registered metastore:
+
+```sql
+LIST AWS GLUE METASTORE TABLES glue_prod.analytics
+```
+
+For a remote connection with inline options:
 
 ```sql
 LIST AWS GLUE METASTORE TABLES REMOTE OPTIONS (
@@ -1749,13 +1577,9 @@ LIST AWS GLUE METASTORE TABLES REMOTE OPTIONS (
 DROP AWS GLUE METASTORE <source>.<table>
 ```
 
-**Description**
-
 Deletes a registered Glue metastore (`<metastore>`) or one synced database (`<metastore>.<db>`).
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1767,6 +1591,10 @@ DROP AWS GLUE METASTORE glue_prod
 
 A schema store view is a stored Spark SQL view held in a container. Query Builder views are stored the same way.
 
+**Prerequisites**
+
+Views need an accessible source, an existing container and creation permission. First [create your own container](#122-create-schemastore-container). Preview can use `SELECT 1` without a container. Rename/removal needs an existing view.
+
 ### 12.1 CREATE [OR REPLACE] SCHEMASTORE VIEW
 
 **Syntax**
@@ -1775,13 +1603,9 @@ A schema store view is a stored Spark SQL view held in a container. Query Builde
 CREATE [OR REPLACE] SCHEMASTORE VIEW <view> WITH CONTAINER <container> AS <SELECT query …>
 ```
 
-**Description**
-
 Creates a Spark SQL view in a container; OR REPLACE overwrites an existing view.
 
-**Privileges**
-
-Administrators, or users granted the Query Builder Write permission.
+**Privileges:** Administrators or Query Builder Write users.
 
 **Remarks**
 
@@ -1790,13 +1614,8 @@ Administrators, or users granted the Query Builder Write permission.
 **Example**
 
 ```sql
-CREATE DATASOURCE crm_pg DESCRIBE BY "PostgreSQL" OPTIONS (
-  jdbcdriver "org.postgresql.Driver",
-  jdbcurl "jdbc:postgresql://crm-db.example.com:5432/crm",
-  username "datathon",
-  password "changeme",
-  fetchsize "1000"
-)
+CREATE SCHEMASTORE VIEW reasons WITH CONTAINER analysis AS
+SELECT r_reason_sk, r_reason_desc FROM TPCDS_DB.reason
 ```
 
 ### 12.2 CREATE SCHEMASTORE CONTAINER
@@ -1807,13 +1626,9 @@ CREATE DATASOURCE crm_pg DESCRIBE BY "PostgreSQL" OPTIONS (
 CREATE SCHEMASTORE CONTAINER <name>
 ```
 
-**Description**
-
 Creates a schema-store view container, the folder Query Builder views live in.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1829,13 +1644,9 @@ CREATE SCHEMASTORE CONTAINER analysis
 PREVIEW SCHEMASTORE SQL AS <SELECT query …>
 ```
 
-**Description**
-
 Runs a Spark SQL query and returns up to 10 rows.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -1855,13 +1666,9 @@ PREVIEW SCHEMASTORE SQL AS SELECT country, COUNT(*) AS customers FROM crm_pg.cus
 SHOW DATASOURCE VIEWS
 ```
 
-**Description**
+Lists accessible schema-store views: name, generator and cached table.
 
-Lists the schema-store views you can see: name, generator, cached table.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1877,13 +1684,9 @@ SHOW DATASOURCE VIEWS
 UPDATE SCHEMASTORE VIEW <source>.<table> SET NAME <new_name>
 ```
 
-**Description**
-
 Renames a schema-store view and updates its grants and data-mart references.
 
-**Privileges**
-
-Administrators, or users granted the Query Builder Write permission.
+**Privileges:** Administrators or Query Builder Write users.
 
 **Remarks**
 
@@ -1904,13 +1707,9 @@ UPDATE SCHEMASTORE VIEW analysis.top_customers SET NAME best_customers
 DROP SCHEMASTORE VIEW <view> FROM <container>
 ```
 
-**Description**
-
 Deletes a schema-store view unless a data mart uses it, and revokes its privileges.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -1922,6 +1721,10 @@ DROP SCHEMASTORE VIEW best_customers FROM analysis
 
 A Unified Semantic Layer (USL) is a semantic model of tables, keys and relationships. Each table is compiled from DDL, deployed to a namespace under `lightning.metastore`, and activated with a query over source data. An activated table is queried as `lightning.metastore.<namespace>.<usl>.<table>`.
 
+**Prerequisites**
+
+Deployment needs creation permission and a namespace under `lightning.metastore`. Activation needs an accessible SELECT matching the table schema. Load/update needs an existing USL. Compile without DEPLOY returns a model without saving it.
+
 ### 13.1 COMPILE USL
 
 **Syntax**
@@ -1932,13 +1735,9 @@ COMPILE USL <usl> [DEPLOY] NAMESPACE <namespace> DDL
 [<CREATE TABLE statement>; …]
 ```
 
-**Description**
-
 Compiles USL table DDL into a semantic model; with DEPLOY it saves the model under the namespace.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Limitations**
 
@@ -1947,7 +1746,7 @@ Administrators only.
 
 **Remarks**
 
-- Separate CREATE TABLE statements with `;`. The SQL Workspace splits editor text on `;`; a model with more than one table must therefore be created from the Unified Semantic Layer → New USL screen.
+- Separate CREATE TABLE definitions with `;`. SQL Workspace splits editor text at those separators. For multiple tables, use Unified Semantic Layer → New USL, or send the whole COMPILE statement over JDBC/HTTP with a runner that keeps it intact. Do not send each definition separately.
 - Without DEPLOY, the command returns the model definition as JSON and stores nothing.
 - The namespace must exist; create it with `CREATE NAMESPACE IF NOT EXISTS lightning.metastore.<name>`.
 
@@ -1977,13 +1776,9 @@ CREATE TABLE orders (
 LOAD USL <usl> NAMESPACE <namespace>
 ```
 
-**Description**
-
 Returns a USL as JSON: tables, ordered columns, keys and materialization info.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -1999,13 +1794,9 @@ LOAD USL retail NAMESPACE lightning.metastore.datathon
 SHOW NAMESPACES OR TABLES IN <namespace>
 ```
 
-**Description**
-
 Lists the namespaces, USLs and tables (with activation flag) under a namespace, filtered by access.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Remarks**
 
@@ -2025,13 +1816,9 @@ SHOW NAMESPACES OR TABLES IN lightning.metastore
 ACTIVATE USL TABLE <namespace.usl.table> AS <SELECT query …>
 ```
 
-**Description**
-
 Binds a USL table to a SELECT query after checking the query matches the declared schema.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -2054,17 +1841,14 @@ FROM crm_pg.customers
 UPDATE USL <usl> NAMESPACE <namespace> AS <USL JSON …>
 ```
 
-**Description**
-
 Replaces a whole USL from its JSON form.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
 - Start from the JSON returned by LOAD USL. The command replaces the entire model.
+- Re-run `ACTIVATE USL TABLE` after replacement before querying the table. On Zetaris 2.4.3.1, the 12 October 2026 live check accepted JSON containing `activateQuery` but the next SELECT returned `table(...) is not activated`. Reactivation restored query access.
 
 **Example**
 
@@ -2080,13 +1864,9 @@ UPDATE USL retail NAMESPACE lightning.metastore.datathon AS {"namespace": ["meta
 UPDATE USL <namespace.usl.table[.column]> SET [TABLE | COLUMN] DESCRIPTION <text …>
 ```
 
-**Description**
-
 Sets the description of a USL, one of its tables, or one column.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2102,13 +1882,9 @@ UPDATE USL lightning.metastore.datathon.retail.customer SET TABLE DESCRIPTION On
 UPDATE USL <namespace.usl.table> SET COLUMN ORDER <col1, col2, …>
 ```
 
-**Description**
-
 Saves a table's column display order; list every column, comma-separated.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2124,13 +1900,9 @@ UPDATE USL lightning.metastore.datathon.retail.customer SET COLUMN ORDER id, ful
 REMOVE USL <usl> NAMESPACE <namespace>
 ```
 
-**Description**
-
 Deletes a USL.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2142,6 +1914,10 @@ REMOVE USL retail NAMESPACE lightning.metastore.datathon
 
 Data-quality rules are boolean expressions evaluated against activated USL tables.
 
+**Prerequisites**
+
+Rules and record inspection need an activated USL table. Registering a rule needs model-change permission. Named operations need an existing rule; check names with `LIST DQ USL`.
+
 ### 14.1 REGISTER DQ
 
 **Syntax**
@@ -2150,13 +1926,9 @@ Data-quality rules are boolean expressions evaluated against activated USL table
 REGISTER DQ <rule> TABLE <namespace.usl.table> AS <boolean expression …>
 ```
 
-**Description**
-
 Adds a named data-quality rule, a boolean expression, to an activated USL table.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2173,13 +1945,9 @@ email IS NOT NULL AND email LIKE '%@%'
 LIST DQ USL <namespace.usl>
 ```
 
-**Description**
-
 Lists the key constraints and data-quality rules for every table in a USL.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -2195,13 +1963,9 @@ LIST DQ USL lightning.metastore.datathon.retail
 SHOW DQ {VALID | INVALID} RECORD <rule> TABLE <namespace.usl.table>
 ```
 
-**Description**
-
 Returns the records that pass (VALID) or fail (INVALID) one rule.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Remarks**
 
@@ -2221,13 +1985,9 @@ SHOW DQ INVALID RECORD valid_email TABLE lightning.metastore.datathon.retail.cus
 SHOW DQ ALL {VALID | INVALID} TABLE <namespace.usl.table>
 ```
 
-**Description**
-
 Returns the records that pass every rule, or fail any rule.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2243,13 +2003,9 @@ SHOW DQ ALL INVALID TABLE lightning.metastore.datathon.retail.customer
 UPDATE DQ <rule> TABLE <namespace.usl.table> SET NAME = <new_rule>, EXPRESSION = <boolean expression …>
 ```
 
-**Description**
-
 Renames a data-quality rule and/or changes its expression.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2266,13 +2022,9 @@ SET NAME = valid_email_v2, EXPRESSION = email LIKE '%@%.%'
 RUN DQ <rule> TABLE <namespace>.<usl>.<table>
 ```
 
-**Description**
-
 Runs one rule, or all rules and key constraints, and returns total, valid and invalid counts.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Limitations**
 
@@ -2296,13 +2048,9 @@ RUN DQ valid_email TABLE lightning.metastore.datathon.retail.customer
 REMOVE DQ <rule> TABLE <namespace.usl.table>
 ```
 
-**Description**
-
 Deletes a data-quality rule.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -2318,6 +2066,10 @@ REMOVE DQ valid_email_v2 TABLE lightning.metastore.datathon.retail.customer
 
 These commands write a query result or a USL table to storage.
 
+**Prerequisites**
+
+Export needs a writable destination, storage settings/credentials and query access. USL materialisation also needs an activated table. Confirm the path and overwrite/append behaviour before writing.
+
 ### 15.1 RUN EXPORT TO STORAGE
 
 **Syntax**
@@ -2326,13 +2078,9 @@ These commands write a query result or a USL table to storage.
 RUN EXPORT TO STORAGE (key 'value', …)
 ```
 
-**Description**
+Writes query results to cloud storage or an Iceberg table.
 
-Runs a query and writes the result to cloud storage or an Iceberg table.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Remarks**
 
@@ -2360,13 +2108,9 @@ RUN EXPORT TO STORAGE (
 MATERIALIZE USL TABLE <namespace.usl.table> TO STORAGE (key 'value', …)
 ```
 
-**Description**
-
 Runs a USL table's activation query and writes the result to storage.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -2389,6 +2133,10 @@ MATERIALIZE USL TABLE lightning.metastore.datathon.retail.customer TO STORAGE (
 
 Pipelines are built in the Data Pipeline designer and stored in pipeline containers. Several commands in this chapter take the pipeline specification in JSON form.
 
+**Prerequisites**
+
+Saving needs your own container, write permission and a complete specification with accessible sources. Infer/verify needs a valid query or specification. Named describe/update/drop needs a saved relation.
+
 ### 16.1 CREATE PIPELINE CONTAINER
 
 **Syntax**
@@ -2397,13 +2145,9 @@ Pipelines are built in the Data Pipeline designer and stored in pipeline contain
 CREATE PIPELINE CONTAINER <name> [DESCRIPTION '<desc>']
 ```
 
-**Description**
-
 Creates a pipeline container.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Example**
 
@@ -2419,13 +2163,9 @@ CREATE PIPELINE CONTAINER etl DESCRIPTION 'Daily ETL'
 REGISTER PIPELINE RELATION CONTAINER <container> SPEC <pipeline JSON …>
 ```
 
-**Description**
-
 Saves a pipeline into a container.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Remarks**
 
@@ -2453,13 +2193,9 @@ REGISTER PIPELINE RELATION CONTAINER etl SPEC
 LIST PIPELINE CONTAINER
 ```
 
-**Description**
+Lists accessible pipeline containers.
 
-Lists the pipeline containers you can see.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -2475,13 +2211,9 @@ LIST PIPELINE CONTAINER
 LIST PIPELINE RELATION <container>
 ```
 
-**Description**
-
 Lists the pipelines in a container.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -2497,13 +2229,9 @@ LIST PIPELINE RELATION etl
 DESCRIBE PIPELINE RELATION <container>.<pipeline>
 ```
 
-**Description**
-
 Returns a saved pipeline's JSON.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Read or Write permission.
+**Privileges:** Administrators or Data Pipeline Read or Write users.
 
 **Limitations**
 
@@ -2527,13 +2255,9 @@ DESCRIBE PIPELINE RELATION etl.daily_orders
 VERIFY PIPELINE SPEC <pipeline JSON …>
 ```
 
-**Description**
-
 Validates a whole pipeline spec, source access included; returns validity, schema and error.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Remarks**
 
@@ -2553,13 +2277,9 @@ VERIFY PIPELINE SPEC {"name": "daily_orders", "nodes": […]}
 INFER SQLTABLE SOURCES SPEC <SQL query …>
 ```
 
-**Description**
-
 Returns the source tables and aliases that a SQL query reads.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Example**
 
@@ -2575,13 +2295,9 @@ INFER SQLTABLE SOURCES SPEC SELECT c.id, o.amount FROM crm_pg.customers c JOIN c
 INFER SQLTABLE COLUMNS SPEC <SQL query …>
 ```
 
-**Description**
-
 Returns a SQL query's output columns with their source table.column and type.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Example**
 
@@ -2597,13 +2313,9 @@ INFER SQLTABLE COLUMNS SPEC SELECT c.id, o.amount FROM crm_pg.customers c JOIN c
 UPDATE PIPELINE RELATION <container>.<pipeline> SPEC <pipeline JSON>
 ```
 
-**Description**
-
 Replaces a saved pipeline's JSON.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Limitations**
 
@@ -2627,13 +2339,9 @@ UPDATE PIPELINE RELATION etl.daily_orders SPEC {"name": "daily_orders", "nodes":
 RUN PIPELINE ON '<node>' [LIMIT <n>] SPEC <pipeline JSON …>
 ```
 
-**Description**
-
 Runs an unsaved pipeline up to the named node and returns its rows.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Read or Write permission.
+**Privileges:** Administrators or Data Pipeline Read or Write users.
 
 **Remarks**
 
@@ -2653,13 +2361,9 @@ RUN PIPELINE ON 'orders_projection' LIMIT 100 SPEC {"name": "daily_orders", "nod
 DROP PIPELINE CONTAINER <name>
 ```
 
-**Description**
-
 Deletes a pipeline container with its dependent views and privileges.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Example**
 
@@ -2675,13 +2379,9 @@ DROP PIPELINE CONTAINER etl
 DROP PIPELINE RELATION <container>.<pipeline>
 ```
 
-**Description**
-
 Deletes a saved pipeline.
 
-**Privileges**
-
-Administrators, or users granted the Data Pipeline Write permission.
+**Privileges:** Administrators or Data Pipeline Write users.
 
 **Limitations**
 
@@ -2697,6 +2397,10 @@ DROP PIPELINE RELATION etl.daily_orders
 
 A virtual data mart presents source tables under new table and column names without copying data.
 
+**Prerequisites**
+
+Creation needs write permission. Adding a table needs an existing mart and source access; map every source column. Other operations need the existing mart or table.
+
 ### 17.1 CREATE DATAMART
 
 **Syntax**
@@ -2705,13 +2409,9 @@ A virtual data mart presents source tables under new table and column names with
 CREATE DATAMART <name> [DESCRIBE BY '<description>']
 ```
 
-**Description**
-
 Creates a virtual data mart.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Example**
 
@@ -2727,13 +2427,9 @@ CREATE DATAMART sales_mart DESCRIBE BY 'Sales mart'
 ADD DATAMART TABLE <table> INTO <datamart> FROM <source.path> VSCHEMA (<column> <virtual_name>, …)
 ```
 
-**Description**
-
 Adds a virtual table over a source table; every source column must be given a virtual name.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Remarks**
 
@@ -2754,13 +2450,9 @@ VSCHEMA (id customer_id, full_name name, email email, country country, created_a
 SHOW DATAMARTS
 ```
 
-**Description**
+Lists accessible data marts.
 
-Lists the data marts you can see.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -2776,13 +2468,9 @@ SHOW DATAMARTS
 SHOW DATAMART TABLES <datamart>
 ```
 
-**Description**
-
 Lists a data mart's tables with their sources.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -2798,13 +2486,9 @@ SHOW DATAMART TABLES sales_mart
 DESCRIBE DATAMART TABLE <source>.<table>
 ```
 
-**Description**
-
 Returns a data-mart table's real-to-virtual column mapping.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Read or Write permission.
+**Privileges:** Administrators or Virtual Data Mart Read or Write users.
 
 **Example**
 
@@ -2820,13 +2504,9 @@ DESCRIBE DATAMART TABLE sales_mart.customer_v
 UPDATE DATAMART <name> OPTIONS (key 'value', …)
 ```
 
-**Description**
-
 Renames a data mart and/or sets its description.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Remarks**
 
@@ -2846,13 +2526,9 @@ UPDATE DATAMART sales_mart OPTIONS (DESCRIPTION "Sales mart for the datathon")
 UPDATE DATAMART TABLE <source>.<table> SET VSCHEMA (<column> <virtual_name>,…)
 ```
 
-**Description**
-
 Rewrites a data-mart table's virtual column names.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Example**
 
@@ -2868,13 +2544,9 @@ UPDATE DATAMART TABLE sales_mart.customer_v SET VSCHEMA (id customer_id, full_na
 UPDATE DATAMART TABLE <source>.<table> SET NAME <new_name>
 ```
 
-**Description**
-
 Renames a data-mart table.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Example**
 
@@ -2890,18 +2562,14 @@ UPDATE DATAMART TABLE sales_mart.customer_v SET NAME customers
 DROP DATAMART <name>
 ```
 
-**Description**
-
 Deletes a data mart with its dependent views and privileges.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Example**
 
 ```sql
-DROP DATAMART TABLE sales_mart.customers
+DROP DATAMART sales_mart
 ```
 
 ### 17.10 DROP DATAMART TABLE
@@ -2912,13 +2580,9 @@ DROP DATAMART TABLE sales_mart.customers
 DROP DATAMART TABLE <source>.<table>
 ```
 
-**Description**
-
 Deletes data-mart table `<datamart>.<table>`.
 
-**Privileges**
-
-Administrators, or users granted the Virtual Data Mart Write permission.
+**Privileges:** Administrators or Virtual Data Mart Write users.
 
 **Example**
 
@@ -2930,6 +2594,10 @@ DROP DATAMART TABLE sales_mart.customers
 
 This chapter describes the query-plan command.
 
+**Prerequisites**
+
+Administrator permission and an accessible SELECT query. `EXPLAIN QUERY AS SELECT 1` needs no source table.
+
 ### 18.1 EXPLAIN QUERY
 
 **Syntax**
@@ -2938,13 +2606,9 @@ This chapter describes the query-plan command.
 EXPLAIN QUERY AS <SELECT query>
 ```
 
-**Description**
-
 Returns the query plan for a statement.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Limitations**
 
@@ -2964,6 +2628,10 @@ EXPLAIN QUERY AS SELECT country, COUNT(*) FROM crm_pg.customers GROUP BY country
 
 Off-site caching stores a copy of a table in memory or in file storage to accelerate queries.
 
+**Prerequisites**
+
+Caching needs a table, source access and cache-management permission. Update/uncache needs an active cache. Policy/history lists may be empty. `INVALIDATE CACHE` affects every organisation; confirm that scope first.
+
 ### 19.1 SHOW CACHE TABLES
 
 **Syntax**
@@ -2972,13 +2640,9 @@ Off-site caching stores a copy of a table in memory or in file storage to accele
 SHOW CACHE TABLES
 ```
 
-**Description**
-
 Lists cached tables with storage, size, partitions and hit counts.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -2994,13 +2658,9 @@ SHOW CACHE TABLES
 SHOW CACHE POLICY
 ```
 
-**Description**
-
 Lists stored organisation cache policies.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -3016,13 +2676,9 @@ SHOW CACHE POLICY
 SHOW CACHE TABLE POLICY [<datasource>]
 ```
 
-**Description**
-
 Lists per-table cache policies, optionally for one datasource.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -3038,19 +2694,14 @@ SHOW CACHE TABLE POLICY crm_pg
 OFFSITE CACHE TABLE <source>.<table> TO {ONSITEMEMORY | MEMORY | FILE} WITH (key 'value', …)
 ```
 
-**Description**
-
 Caches a table in Spark memory or a file cache, with expiry and partition options.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
 - `expireInSec` is `-1` for no expiry or a number of seconds; `partcount` sets the number of partitions.
 - Storage is `MEMORY` or `FILE`.
-- `expireInSec` is `-1` for no expiry or a number of seconds; `partcount` sets the number of partitions.
 
 **Example**
 
@@ -3066,13 +2717,9 @@ OFFSITE CACHE TABLE crm_pg.customers TO MEMORY WITH (expireInSec "-1", partcount
 OFFSITE UNCACHE TABLE <source>.<table>
 ```
 
-**Description**
-
 Drops a table's cache and its refresh schedule.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -3088,13 +2735,9 @@ OFFSITE UNCACHE TABLE crm_pg.customers
 UPDATE OFFSITE CACHE TABLE <source>.<table> WITH (key 'value', …)
 ```
 
-**Description**
-
 Changes a cached table's refresh schedule.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -3110,13 +2753,9 @@ UPDATE OFFSITE CACHE TABLE crm_pg.customers WITH (expireInSec "600")
 OFFSITE CACHE TABLE DETAILS <source>.<table>
 ```
 
-**Description**
-
 Returns a table's cache settings; empty when the table isn't cached.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -3132,13 +2771,9 @@ OFFSITE CACHE TABLE DETAILS crm_pg.customers
 OFFSITE CACHE HISTORY <source>.<table>
 ```
 
-**Description**
-
 Lists a table's cache and uncache history.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Example**
 
@@ -3154,13 +2789,9 @@ OFFSITE CACHE HISTORY crm_pg.customers
 INVALIDATE CACHE
 ```
 
-**Description**
-
 Flushes the driver's metadata caches for every organisation; table caches are kept.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -3170,7 +2801,11 @@ INVALIDATE CACHE
 
 ## 20. Users and Roles
 
-User and role names are stored in upper case and are matched without regard to case.
+User and role names are stored in upper case and matched case-insensitively.
+
+**Prerequisites**
+
+Check each command's user-management privileges. Assignment/revocation needs existing users and roles. Deletion examples require a disposable test user, not a participant account.
 
 ### 20.1 CREATE ROLE
 
@@ -3180,13 +2815,9 @@ User and role names are stored in upper case and are matched without regard to c
 CREATE ROLE '<role>' [DESCRIBE BY '<desc>']
 ```
 
-**Description**
-
 Creates a role; admin, none, all and default are reserved names.
 
-**Privileges**
-
-Administrators, or users granted the User Management Write permission.
+**Privileges:** Administrators or User Management Write users.
 
 **Example**
 
@@ -3202,13 +2833,9 @@ CREATE ROLE 'analyst' DESCRIBE BY 'Datathon analysts'
 SHOW USERS
 ```
 
-**Description**
-
 Lists your organisation's users: email, name, level, organisation, LDAP flag.
 
-**Privileges**
-
-Administrators, or users granted the User Management Read or Write permission.
+**Privileges:** Administrators or User Management Read or Write users.
 
 **Example**
 
@@ -3224,13 +2851,9 @@ SHOW USERS
 SHOW ROLES
 ```
 
-**Description**
-
 Lists roles: name, creator, created time, description, LDAP flag.
 
-**Privileges**
-
-Administrators, or users granted the User Management Read or Write permission.
+**Privileges:** Administrators or User Management Read or Write users.
 
 **Example**
 
@@ -3246,13 +2869,9 @@ SHOW ROLES
 SHOW ROLE ASSIGNED TO USER '<user>'
 ```
 
-**Description**
-
 Lists a user's roles with who assigned them and when.
 
-**Privileges**
-
-Administrators, or users granted the User Management Read or Write permission.
+**Privileges:** Administrators or User Management Read or Write users.
 
 **Example**
 
@@ -3268,13 +2887,9 @@ SHOW ROLE ASSIGNED TO USER 'alice@example.com'
 SHOW USER ASSIGNED TO ROLE '<role>'
 ```
 
-**Description**
-
 Lists a role's users with who assigned them and when.
 
-**Privileges**
-
-Administrators, or users granted the User Management Read or Write permission.
+**Privileges:** Administrators or User Management Read or Write users.
 
 **Example**
 
@@ -3290,13 +2905,9 @@ SHOW USER ASSIGNED TO ROLE 'analyst'
 DESCRIBE USER '<user>'
 ```
 
-**Description**
-
 Returns a user's name, email, level, organisation and LDAP flag.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -3312,13 +2923,9 @@ DESCRIBE USER 'alice@example.com'
 ASSIGN USER '<user>'[, …] TO ROLE '<role>'
 ```
 
-**Description**
-
 Adds users to a role; LDAP-sourced roles are refused.
 
-**Privileges**
-
-Administrators, or users granted the User Management Write permission.
+**Privileges:** Administrators or User Management Write users.
 
 **Example**
 
@@ -3334,13 +2941,9 @@ ASSIGN USER 'alice@example.com', 'bob@example.com' TO ROLE 'analyst'
 DROP USER '<user>'
 ```
 
-**Description**
-
 Deletes a user; you can't delete yourself.
 
-**Privileges**
-
-Administrators, or users granted the User Management Write permission.
+**Privileges:** Administrators or User Management Write users.
 
 **Example**
 
@@ -3356,13 +2959,9 @@ DROP USER 'bob@example.com'
 DROP ROLE '<role>'
 ```
 
-**Description**
-
 Deletes a role and its user assignments.
 
-**Privileges**
-
-Administrators, or users granted the User Management Write permission.
+**Privileges:** Administrators or User Management Write users.
 
 **Example**
 
@@ -3378,13 +2977,9 @@ DROP ROLE 'analyst'
 REVOKE USER '<user>'[, …] FROM ROLE '<role>'
 ```
 
-**Description**
-
 Removes users from a role; LDAP-sourced roles are refused.
 
-**Privileges**
-
-Administrators, or users granted the User Management Write permission.
+**Privileges:** Administrators or User Management Write users.
 
 **Example**
 
@@ -3396,6 +2991,10 @@ REVOKE USER 'bob@example.com' FROM ROLE 'analyst'
 
 Access is controlled at two levels. An assignment attaches a user or role to an object; a grant gives a privilege (SELECT or INSERT) on a table or namespace. Schema store views are protected by grants; view assignments are made per container in the platform interface.
 
+**Prerequisites**
+
+Assignments/grants need existing objects/principals and access-control permission. Metastore forms need a registered Hive or Glue database. Confirm the recipient, object and privilege before access changes.
+
 ### 21.1 SHOW GRANT … ON ALL
 
 **Syntax**
@@ -3404,13 +3003,9 @@ Access is controlled at two levels. An assignment attaches a user or role to an 
 SHOW GRANT [{ROLE '<role>' | USER '<user>'}[, …]] ON ALL
 ```
 
-**Description**
-
 Lists the grants held by users or roles; with no principal, every grant in your organisation.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Read or Write permission.
+**Privileges:** Administrators or Access Control Read or Write users.
 
 **Example**
 
@@ -3426,13 +3021,9 @@ SHOW GRANT USER 'alice@example.com' ON ALL
 LIST {USERS | ROLES} FOR {DATASOURCE | DATAMART | [LIGHTNING] DATABASE | PIPELINE | STREAMING DATASOURCE} <name>
 ```
 
-**Description**
-
 Lists the users or roles assigned to an object.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Read or Write permission.
+**Privileges:** Administrators or Access Control Read or Write users.
 
 **Limitations**
 
@@ -3452,13 +3043,9 @@ LIST USERS FOR DATASOURCE crm_pg
 LIST {USERS | ROLES} FOR {HIVE METASTORE DATABASE|AWS GLUE METASTORE DATABASE} <metastore.db>
 ```
 
-**Description**
-
 Lists the users or roles assigned to a Hive or Glue metastore database.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Read or Write permission.
+**Privileges:** Administrators or Access Control Read or Write users.
 
 **Example**
 
@@ -3474,13 +3061,9 @@ LIST ROLES FOR HIVE METASTORE DATABASE hive_prod.sales
 GRANT {SELECT | INSERT | CACHE} ON {ALL [<object_type>] | USL {NAMESPACE | TABLE} <name> | <object_type> {NAMESPACE | TABLE} <name>} TO {ROLE '<role>' | USER '<user>'}[, …] [WITH GRANT OPTION]
 ```
 
-**Description**
-
 Grants SELECT, INSERT or CACHE on everything, one object type, or a namespace or table.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write; holders of the privilege WITH GRANT OPTION can also grant it permission.
+**Privileges:** Administrators, or users granted the Access Control Write; holders of the privilege WITH GRANT OPTION can also grant it permission.
 
 **Remarks**
 
@@ -3502,13 +3085,9 @@ GRANT SELECT ON DATASOURCE TABLE crm_pg.customers TO USER 'alice@example.com'
 ASSIGN {DATASOURCE | DATAMART | [LIGHTNING] DATABASE | PIPELINE | STREAMING DATASOURCE} <object>[, …] TO ROLE '<role>'[, …]
 ```
 
-**Description**
-
 Assigns datasources, data marts, Lightning databases, pipelines or streaming sources to roles.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Limitations**
 
@@ -3528,13 +3107,9 @@ ASSIGN DATASOURCE crm_pg TO ROLE 'analyst'
 ASSIGN {HIVE METASTORE DATABASE|AWS GLUE METASTORE DATABASE} <metastore.db>[, …] TO ROLE '<role>'[, …]
 ```
 
-**Description**
-
 Assigns Hive or AWS Glue metastore databases to roles.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Example**
 
@@ -3550,13 +3125,9 @@ ASSIGN HIVE METASTORE DATABASE hive_prod.sales TO ROLE 'analyst'
 ASSIGN {DATASOURCE | DATAMART | [LIGHTNING] DATABASE | PIPELINE | STREAMING DATASOURCE} <object>[, …] TO USER '<user>'[, …]
 ```
 
-**Description**
-
 Assigns datasources, data marts, Lightning databases, pipelines or streaming sources to users.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Limitations**
 
@@ -3576,13 +3147,9 @@ ASSIGN DATAMART sales_mart TO USER 'alice@example.com'
 ASSIGN {HIVE METASTORE DATABASE|AWS GLUE METASTORE DATABASE} <metastore.db>[, …] TO USER '<user>'[, …]
 ```
 
-**Description**
-
 Assigns Hive or AWS Glue metastore databases to users.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Example**
 
@@ -3598,13 +3165,9 @@ ASSIGN AWS GLUE METASTORE DATABASE glue_prod.analytics TO USER 'alice@example.co
 REVOKE {SELECT | INSERT | CACHE} ON {ALL [<object_type>] | USL {NAMESPACE | TABLE} <name> | <object_type> {NAMESPACE | TABLE} <name>} FROM {ROLE '<role>' | USER '<user>'}[, …]
 ```
 
-**Description**
-
 Revokes a SELECT, INSERT or CACHE grant.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write; holders of the privilege WITH GRANT OPTION can also grant it permission.
+**Privileges:** Administrators, or users granted the Access Control Write; holders of the privilege WITH GRANT OPTION can also grant it permission.
 
 **Example**
 
@@ -3620,13 +3183,9 @@ REVOKE SELECT ON DATASOURCE TABLE crm_pg.customers FROM USER 'alice@example.com'
 REVOKE {DATASOURCE | DATAMART | [LIGHTNING] DATABASE | PIPELINE | STREAMING DATASOURCE} <object>[, …] FROM ROLE '<role>'
 ```
 
-**Description**
-
 Removes object assignments from a role.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Limitations**
 
@@ -3650,13 +3209,9 @@ REVOKE DATASOURCE crm_pg FROM ROLE 'analyst'
 REVOKE {HIVE METASTORE DATABASE|AWS GLUE METASTORE DATABASE} <metastore.db>[, …] FROM ROLE '<role>'
 ```
 
-**Description**
-
 Removes metastore database assignments from a role.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Example**
 
@@ -3672,13 +3227,9 @@ REVOKE HIVE METASTORE DATABASE hive_prod.sales FROM ROLE 'analyst'
 REVOKE {USERS '<user>'[, …] | ROLES '<role>'[, …]} FROM {DATASOURCE | DATAMART | [LIGHTNING] DATABASE | PIPELINE | STREAMING DATASOURCE} <name>
 ```
 
-**Description**
-
 Removes the named users' or roles' assignment to an object, with their privileges on it.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Limitations**
 
@@ -3698,13 +3249,9 @@ REVOKE USERS 'alice@example.com' FROM DATAMART sales_mart
 REVOKE {USERS '<user>'[, …] | ROLES '<role>'[, …]} FROM {HIVE METASTORE DATABASE|AWS GLUE METASTORE DATABASE} <metastore.db>
 ```
 
-**Description**
-
 Removes users' or roles' assignment to a Hive or Glue metastore database.
 
-**Privileges**
-
-Administrators, or users granted the Access Control Write permission.
+**Privileges:** Administrators or Access Control Write users.
 
 **Example**
 
@@ -3716,6 +3263,10 @@ REVOKE ROLES 'analyst' FROM AWS GLUE METASTORE DATABASE glue_prod.analytics
 
 Commands for the virtual data warehouse feature.
 
+**Prerequisites**
+
+Administrator permission. Virtual data warehouses are unused here, so the list is normally empty.
+
 ### 22.1 LIST DATAWAREHOUSE
 
 **Syntax**
@@ -3724,13 +3275,9 @@ Commands for the virtual data warehouse feature.
 LIST DATAWAREHOUSE
 ```
 
-**Description**
-
 Lists warehouses with their status and endpoints.
 
-**Privileges**
-
-Administrators only.
+**Privileges:** Administrators only.
 
 **Remarks**
 
@@ -3746,6 +3293,10 @@ LIST DATAWAREHOUSE
 
 Commands that report on the platform.
 
+**Prerequisites**
+
+A signed-in account. No datasource or dataset setup is needed; results reflect your access.
+
 ### 23.1 SHOW SCHEMA
 
 **Syntax**
@@ -3754,13 +3305,9 @@ Commands that report on the platform.
 SHOW SCHEMA
 ```
 
-**Description**
+Lists accessible databases, datasources, streams, pipelines and data marts.
 
-Lists the names and kinds of everything you can see: databases, datasources, streams, pipelines, data marts.
-
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 
@@ -3776,13 +3323,9 @@ SHOW SCHEMA
 SHOW SERVER VERSION
 ```
 
-**Description**
-
 Returns the driver's version, build time, tag and commit.
 
-**Privileges**
-
-Any signed-in user. Results are limited to the objects assigned to the user.
+**Privileges:** Signed-in users; assigned objects only.
 
 **Example**
 

@@ -1,6 +1,11 @@
 @font-face { font-family: "Plus Jakarta Sans"; src: url("fonts/plus-jakarta-sans.ttf") format("truetype"); font-style: normal; font-weight: 200 800; font-display: swap; }
 :root { color-scheme: light; --ink: #06070d; --muted: #595e6e; --line: #e7e7ee; --accent: #4052f2; --accent-hover: #2f3ec2; --soft: #f3f5fe; --selected: #dbe0fd; --surface: #fff; --panel: #f3f5fe; --focus: #4052f2; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.setup-switch { display: flex; gap: 4px; width: fit-content; padding: 4px; margin: 24px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.setup-switch button { min-width: 100px; min-height: 44px; padding: 10px 24px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-weight: 650; cursor: pointer; }
+.setup-switch button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.setup-switch button:hover { box-shadow: inset 0 0 0 1px var(--accent); }
 html { scroll-padding-top: 100px; }
 body { margin: 0; background: var(--surface); color: var(--ink); font: 16px/1.55 "Plus Jakarta Sans", system-ui, sans-serif; }
 a { color: var(--accent); text-underline-offset: 3px; }
@@ -50,7 +55,8 @@ article img { max-width: 100%; }
 article blockquote { border-left: 3px solid var(--accent); margin: 24px 0; padding: 12px 20px; background: var(--soft); color: var(--muted); }
 article blockquote p:last-child { margin: 0; }
 code { font: .86em/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); padding: 2px 5px; border-radius: 3px; overflow-wrap: anywhere; }
-pre { position: relative; background: var(--panel); border: 1px solid var(--line); padding: 48px 20px 20px; border-radius: 12px; overflow-x: auto; margin: 24px 0; }
+article :is(h1, h2, h3, h4, h5, h6) code { font: inherit; background: none; padding: 0; border-radius: 0; }
+pre { position: relative; background: var(--panel); border: 1px solid var(--line); padding: 20px 80px 20px 20px; border-radius: 12px; overflow-x: auto; margin: 24px 0; }
 pre code { font-size: 13px; background: none; padding: 0; overflow-wrap: normal; }
 .copy-button { position: absolute; top: 9px; right: 9px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; color: var(--muted); padding: 4px 10px; font: 500 12px/1.55 "Plus Jakarta Sans", system-ui, sans-serif; cursor: pointer; }
 .table-scroll { overflow-x: auto; margin: 24px 0; border: 1px solid var(--line); border-radius: 12px; }
@@ -71,7 +77,10 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 footer { font-size: 11px; color: var(--muted); margin-top: 42px; padding-top: 20px; border-top: 1px solid var(--line); }
 .assistant-launcher { margin: 40px 0; padding-top: 8px; border-top: 1px solid var(--line); }
 .protocol-field { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 700; }
-.protocol-field select { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); font: 500 14px/1.55 "Plus Jakarta Sans", system-ui, sans-serif; }
+.protocol-field select { appearance: none; -webkit-appearance: none; min-width: 112px; min-height: 44px; padding: 10px 40px 10px 14px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background-color: var(--surface); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237c89f7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 14px; font: 500 14px/1.55 "Plus Jakarta Sans", system-ui, sans-serif; cursor: pointer; }
+.protocol-field select:hover { border-color: var(--accent); }
+.protocol-field select:focus-visible { border-color: var(--focus); outline: 2px solid var(--focus); outline-offset: 3px; }
+.protocol-field select option { background: var(--surface); color: var(--ink); }
 .starter-prompt { white-space: pre-wrap; }
 .starter-prompt code { overflow-wrap: anywhere; }
 .launcher-actions { display: flex; flex-wrap: wrap; gap: 12px; }

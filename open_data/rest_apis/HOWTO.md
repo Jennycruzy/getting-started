@@ -1,9 +1,9 @@
 # HOWTO: onboard these REST API sources into Zetaris
 
-For first-time onboarding, start with [Start here](../../START-HERE.md) and [your first dataset](../../docs/guides/first-dataset.md). That guide uses a minimal PokéAPI subset as the common starter; PUDL is currently known to fail. This HOWTO explains the full REST patterns after that starter. On the shared event instance, use assigned team database/container names and update every reference consistently.
+Start with [Start here](../../START-HERE.md) and [your first dataset](../../docs/guides/first-dataset.md). PUDL is currently known to fail. On the shared event instance, use your assigned database and container names consistently.
 
 
-**File naming:** each numbered source is split into two files sharing a prefix: `NN_<name>_create.sql` (every `CREATE`/`DROP`/`CACHE` DDL statement) and `NN_<name>_select.sql` (verification and, where present, example queries). Run the create script first, then verify with its matching select script — the verification queries there are commented out by default so a bulk run of the file doesn't silently fire read queries.
+**File naming:** each source has a numbered `_create.sql` file for DDL and a matching `_select.sql` file for verification and examples. Run the create script first. Verification and optional queries in the select files are commented out by default.
 
 **Source folders:** each source's script pair lives in one of four folders under `sql/`, based on whether the source API enforces a rate limit and whether the script is still current:
 
@@ -59,14 +59,14 @@ Two more classification systems from the same service follow the same pattern wi
 
 1. Open the Zetaris **SQL Editor**.
 2. For each source in `sql/`, in order:
-   - Read the `_create.sql` header comment and every numbered caveat.
+   - Read the `_create.sql` header and its caveats.
    - Run the `CREATE LIGHTNING DATABASE` statement (Step 0).
-   - Run the `CREATE SCHEMASTORE CONTAINER` statement **once** (Step 1) — skip it if the container already exists in your environment (see "Known limitations" below).
-   - Fill in any required `HEADER` values (e.g. a real `user-agent` string — some APIs, like SEC EDGAR, reject default/missing ones).
-   - Run each `CREATE LIGHTNING REST TABLE` + `CREATE SCHEMASTORE VIEW` pair in `_create.sql`.
-   - Open the matching `_select.sql`, uncomment its verification query (see "Verifying data" below), and run it before trusting the result.
+   - Create the SchemaStore container once; skip this statement if it already exists.
+   - Fill required `HEADER` values. SEC EDGAR requires a real `User-Agent`.
+   - Run each `CREATE LIGHTNING REST TABLE` and `CREATE SCHEMASTORE VIEW` statement.
+   - Run the matching verification query in `_select.sql` before trusting the result.
 
-Suggested order — lowest-risk / simplest shape first, so a failure on a harder source doesn't block confirming the basic pattern works at all (see "Understanding JSON response shapes" below):
+Suggested order, from simpler verified patterns to higher-risk shapes:
 
 | Order | Script | Why here |
 |---|---|---|
@@ -82,44 +82,36 @@ Suggested order — lowest-risk / simplest shape first, so a failure on a harder
 | 10 | `rate_limited/13_company_dns_eu_nace_create.sql` | Same flat-array shape as `company_dns` V4, one view; a different classification system (EU NACE). Rate limited. |
 | 11 | `rate_limited/14_company_dns_japan_create.sql` | Same shape again (Japan, 1,460 classes). Rate limited — leave a few minutes after 12 and 13, since they call the same service. |
 
-**Not in this sequence:** `sql/known_to_fail/04_singapore_pm25_create.sql` is excluded — it hit a blocking connector-or-API issue during testing (an HTTP 502 on its first statement). See "Known limitations" below and `sql/known_to_fail/README.md`.
+**Excluded:** Singapore PM2.5 registration returned HTTP 502. See the [issue write-up](sql/known_to_fail/ISSUE.md).
 
 ---
 
 ## 2. Verifying data
 
-For every REST source in this package (the query below is commented out by default in each source's `_select.sql` — uncomment it or run it directly in the SQL Editor):
+For every source, run the verification query in its `_select.sql` (commented out by default):
 
-1. `SELECT COUNT(*) FROM <container>.<view_name>;` — get the row count Zetaris thinks it has.
-2. Independently query the same endpoint with `curl` + `jq` (or equivalent) and count the array length directly, e.g.:
+1. Count rows in the Zetaris view.
+2. Count the matching array directly from the API with `curl` and `jq`, for example:
    ```bash
    curl -s -A "YOUR_APP_NAME YOUR_CONTACT_EMAIL" \
      https://data.sec.gov/api/xbrl/companyconcept/CIK0000320193/us-gaap/Revenues.json \
      | jq '.units.USD | length'
    ```
-3. If the Zetaris count is lower than the direct API count, the connector is truncating — don't trust that table for real analysis until that's resolved. See the Troubleshooting / FAQ entry below for the specific case observed against EDGAR.
+3. Compare counts before analysis. A lower Zetaris count may mean truncation; check the source response first. On EDGAR, the direct API and Zetaris both returned 11 rows for Apple's `us-gaap:Revenues` tag.
 
 ---
 
 ## 3. Removing a source
 
-This section reflects what is actually confirmed to work, not what the SQL manual suggests should work.
+On 12 October 2026, Zetaris 2.4.3.1 accepted these commands against disposable public-S3 file tables and a PokeAPI REST table:
 
-**What works:**
-- `DROP VIEW <container>.<view>` removes a schemastore view. This is confirmed and reliable — use it to clean up the flattened views each script creates. Every script's `TEARDOWN` block contains the `DROP VIEW` statements for its own views.
+- `DROP LIGHTNING DATABASE TABLE sqltest_20261012_files.reason` (file table)
+- `DROP LIGHTNING DATABASE TABLE sqltest_20261012_files.ability` (PokeAPI REST table)
+- `DROP LIGHTNING DATABASE sqltest_20261012_files`
 
-**What does not work:**
-- `DROP TABLE <database>.<table>` against a `CREATE LIGHTNING REST TABLE`-registered table is inconsistent — it has worked for some sources and failed for others with an internal catalog error (`NoSuchElementException: key not found: <database>`), even when the statement is written identically. Do not rely on it.
-- `DROP DATASOURCE <database_name>` does not reliably remove a `CREATE LIGHTNING DATABASE`-registered source. In practice it has either reported that the data source does not exist, or completed without error while the source remained visible in the Data Explorer afterward. `DROP DATASOURCE` appears to be intended for JDBC-style `CREATE DATASOURCE` registrations (documented with a `DROP DATASOURCE ORCL` example matching a JDBC connection), not for the Lightning-registered REST and file sources this package uses.
-- **No SQL statement exists to remove a `SCHEMASTORE CONTAINER`** once created.
+The database drop succeeded after its test tables were removed. This does not establish behavior for every connector. Use the exact `DROP LIGHTNING DATABASE TABLE` form; the check does not establish that generic `DROP TABLE` works. `DROP DATASOURCE` was not validated for these Lightning registrations.
 
-**How to actually remove a source's REST table(s) and Lightning database registration:**
-
-Use the Zetaris SQL Workspace's **Data Explorer**. The source appears under **File Source & API** with the name given to it at creation (e.g. `POKEAPI_REST`, `OFF_LIVE_REST`). Locate the entry there and use the removal action available on that row (for example, a right-click menu or an overflow/options menu icon on the row). This is currently the only confirmed way to remove the underlying registration — there is no SQL equivalent.
-
-If no removal action is available in your version of the Data Explorer either, this is a product gap rather than something this package's scripts can work around; raise it with your Zetaris contact.
-
-Every script's `TEARDOWN` block therefore contains only `DROP VIEW` statements, followed by a comment pointing back to this section for removing the REST table(s) and database registration via the Data Explorer.
+`DROP VIEW <container>.<view>` removes a SchemaStore view. Container removal was performed through the documented API after confirming `viewCount` was zero; this validation did not establish a SQL command for dropping a container. Script `TEARDOWN` blocks therefore keep their `DROP VIEW` statements and direct readers here for source cleanup.
 
 ---
 
@@ -127,25 +119,19 @@ Every script's `TEARDOWN` block therefore contains only `DROP VIEW` statements, 
 
 ### My query failed with an unresolved-column error mentioning a mixed-case, reserved-word, or hyphenated field name
 
-A REST API's JSON response often has field names that Zetaris's SQL layer will not accept unquoted:
+A JSON field may need backticks when it uses mixed case, a reserved word, spaces, or punctuation such as a hyphen. For example, use `` `entityName` ``, `` fact.`start` ``, or `` product.nutriments.`energy-kcal_100g` ``. Check the source keys before writing a view.
 
-- **Mixed-case / camelCase names** (e.g. `entityName`, `updatedTimestamp`) — need backticks: `` `entityName` ``, not `"entityname"` or a bare `entityname`.
-- **Names that collide with SQL reserved words** (e.g. `start`, `end`) — need backticks even though they are not mixed-case, e.g. `` fact.`start` ``.
-- **Names containing a hyphen** (e.g. `energy-kcal_100g`) — need backticks for a different reason: an unquoted hyphen inside an identifier parses as subtraction, e.g. `` product.nutriments.`energy-kcal_100g` ``.
-
-The general rule: if a JSON key contains any character a SQL identifier cannot use unquoted (mixed case, a reserved word, a hyphen, a space, ...), quote it with backticks. Before writing a new script's `SELECT`, check every field name you intend to reference against this rule rather than finding out from the error.
+The unquoted forms may fail or parse incorrectly because Zetaris treats the name as a different identifier or as an operator.
 
 ### My query failed with `UNRESOLVED_COLUMN`, referencing a column that "doesn't exist" on a view I expected to have it
 
-This happens when a downstream query assumes a view carries a column it was never actually given. For example, a view built to expose only `(pokemon_name, ability_name, is_hidden)` will not have `base_experience`, even if a comment elsewhere describes the view as "carrying" that field — the comment can drift out of sync with the view's actual `SELECT` list.
+Check the view's own `CREATE SCHEMASTORE VIEW ... AS SELECT` list. A comment or a similar view may name columns this view does not expose.
 
-Before writing a query that joins or reads from a view, check the view's own `CREATE SCHEMASTORE VIEW ... AS SELECT` statement for the exact column list, rather than relying on a comment or on what a similar-looking view elsewhere in the package exposes. If you need a column from a different view, either select it from that view directly or extend the view's own `SELECT` list.
-
-A related version of this problem happens one level lower, in the raw JSON itself: a `CREATE SCHEMASTORE VIEW` can reference a struct field (e.g. `item.readings.pm25_one_hourly.national`) that looks plausible but was never actually present in the API's response, because it was assumed rather than checked. Singapore's PM2.5 API (`sql/known_to_fail/`) had exactly this — a `national` field that doesn't exist anywhere in the response. Before writing a new script's `SELECT`, pull a real response with `curl` and check every field name you intend to reference actually appears in it, rather than assuming a field exists because it would make sense for the API to provide it.
+Check the raw response too. Singapore PM2.5's documented `national` field was absent from the JSON; see the [issue write-up](sql/known_to_fail/ISSUE.md).
 
 ### My query failed with `MISSING_ATTRIBUTES.RESOLVED_ATTRIBUTE_APPEAR_IN_OPERATION`
 
-This occurs when a query joins a view against an aggregate **subquery of that same view** — a self-join — where the view is itself a `UNION ALL` of other views built with `LATERAL VIEW explode(...)`. For example:
+This can occur when one query reads the same `UNION ALL` view built with `LATERAL VIEW explode(...)` more than once, including through a self-join or subquery. For example:
 
 ```sql
 -- Avoid this pattern:
@@ -158,11 +144,9 @@ JOIN (
 ) top ON top.key = a.key AND top.max_val = a.val;
 ```
 
-The `explode()` operator behind `some_view` leaves behind an internal struct attribute that was never selected. Referencing the same union'd, exploded view twice in one query — once directly, once inside the aggregate subquery — causes the query analyzer to see that internal attribute with conflicting identifiers across the two references.
+The analyzer can see conflicting internal attributes from the repeated exploded view. This was reproduced with StatCan `IN` and scalar subqueries and an Open Food Facts self-join. Joins between distinct views did not show the issue.
 
-Joining two genuinely different views together does not hit this. The problem is specific to referencing a view against a derivative of itself, and this isn't limited to an explicit `JOIN` — Statistics Canada WDS hit the same error with a `WHERE product_id IN (SELECT ... FROM same_view ...)` subquery and with a scalar `HAVING count = (SELECT ... FROM same_view)` subquery, and Open Food Facts hit it via an explicit self-join. Any form that reads the same `UNION ALL`'d exploded view more than once in one query, not just an explicit self-join, is at risk — treat "does this query reference the same union'd, exploded view more than once, anywhere in the query, including inside any subquery" as a standard thing to check before running a new query against a cross-record union view in this package.
-
-**Fix:** rewrite the query as a window function instead of any form of self-reference. A single pass over the view avoids the conflict entirely, whether the original was a self-join, an `IN` subquery, or a scalar `HAVING` subquery:
+**Fix:** use a window function so the query reads the view once:
 
 ```sql
 SELECT key, val
@@ -173,37 +157,25 @@ FROM (
 WHERE rn = 1;
 ```
 
-A plain `COUNT(*) OVER (PARTITION BY key)` (no ranking needed) works the same way for "does this group meet some count threshold" questions — see `sql/rate_limited/08_statcan_wds_select.sql` queries 3, 7, and 8 for worked examples of both the failing subquery forms and their window-function fixes.
-
-`ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)` is standard ANSI/Spark SQL. Prefer this pattern any time a "top row per group" question comes up, especially when the view involved is a `UNION ALL` of `explode()`-based views. See `sql/rate_limited/03_open_food_facts_live_select.sql` query 7 for a worked example of both the failing self-join and the working window-function rewrite.
+Use `COUNT(*) OVER (PARTITION BY key)` for group counts or `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)` to select a top row. See the StatCan and Open Food Facts select scripts for examples.
 
 ### A numeric-looking field sorts or compares wrong (e.g. "closest" or "smallest" picks the wrong row)
 
-A JSON field that looks numeric in a raw response can still be a JSON string rather than a number — check by looking at whether the value is quoted in the raw JSON, e.g. `"kilometers": "47112732.928149391"` (a string) versus `"estimated_diameter_min": 22.1082810359` (a real number). NASA NeoWs's `miss_distance.kilometers` and `relative_velocity.kilometers_per_hour` are both quoted strings, while sibling fields in the same response (`estimated_diameter_min/max`, `absolute_magnitude_h`) are real numbers.
-
-Zetaris's schema inference follows the JSON type, so a quoted numeric field is very likely typed as STRING. Sorting or comparing it without casting does **lexicographic string comparison**, not numeric comparison — a value like `"9000000.1"` sorts *before* `"47112732.9"`, because `'9' > '4'` as the first character, even though 9,000,000 is smaller than 47,000,000 numerically. This fails silently: no error, just a wrong "closest"/"smallest"/"highest" answer.
-
-**Fix:** wrap the field in `CAST(... AS DOUBLE)` (or `INT`/`BIGINT` as appropriate) anywhere it's sorted, compared, or aggregated numerically — ideally once, in the view's own `SELECT`, so every downstream query inherits the correct type instead of needing to remember to cast every time. Before writing a new script's numeric queries, check each field's raw JSON representation for quotes, don't assume "looks like a number" means "is a number."
+JSON may encode numeric-looking values as strings. NeoWs distance and velocity fields are quoted strings, so Zetaris can sort them lexicographically. Cast them to `DOUBLE`, `INT`, or `BIGINT` in the view before numeric comparisons or aggregation.
 
 ### A JSON-stat / SDMX source returns an empty result even though the dataset should have data
 
-On Eurostat, an earlier query used `age=Y15-74`, which isn't a valid category code for that particular dataset. Eurostat doesn't return an error for an invalid dimension code — it silently returns zero valid categories for that dimension (`dimension.age.category.index: {}`) and therefore an empty top-level `value: {}`, which looks identical to "this combination genuinely has no published data."
-
-Before concluding a JSON-stat source has no data for your combination of filters, check `dimension.<name>.category.index` for each dimension you're filtering on (via `curl`, or `SELECT * FROM <container>.<metadata_view>` once you have one) — an empty or missing category list for a dimension means the code you used isn't valid for that dataset, not that the data doesn't exist. Re-querying the same dataset without that filter will show you the actual valid codes.
+Eurostat silently returns an empty result for an invalid dimension code such as `age=Y15-74`. Check `dimension.<name>.category.index` for valid codes before concluding the dataset has no matching rows.
 
 ### A table's row count looks lower than I expect
 
-Verify it independently before trusting it — see "Verifying data" above. On EDGAR, Apple's `us-gaap:Revenues` table returned a suspiciously low row count (11 rows, capping out years before the company's real filing history ends), which looked like the REST connector truncating the response mid-array. It wasn't: a direct `curl` against the live SEC endpoint also returned exactly 11 rows, matching Zetaris's own `SELECT COUNT(*)` exactly. The live SEC API itself only has 11 data points under that specific tag for Apple, likely because Apple, like many filers, stopped using the older `Revenues` tag for total revenue at some point (e.g. around the 2018 ASC 606 revenue-recognition standard change), consistent with all 11 rows tracing to one 2018 filing. General lesson: don't assume a low row count is a Zetaris defect — run the independent `curl`/`jq` check first; it may just mean the source API itself has less data under that specific query than expected.
+Compare the Zetaris count with a direct API count first. Apple's EDGAR `us-gaap:Revenues` endpoint returned 11 rows in both checks; a low count can reflect the source's selected tag, not connector truncation.
 
 ### `CREATE LIGHTNING REST TABLE` (or the Data Explorer previewing a new source) returned an HTTP 502
 
-Before assuming this is a missing header or authentication problem, check the endpoint directly with `curl` (see the "Before running" check at the top of each script). If a plain `curl` GET with no special headers returns `200`, the API itself doesn't require a `User-Agent`, `Accept` header, or authentication, and the 502 is not a header problem.
+Check the endpoint directly with `curl` before changing headers or authentication. The Singapore PM2.5 endpoint returned HTTP 200 to a plain GET, but rapid testing hit 429 after about 5–6 requests in 5–8 seconds and recovered after about 30 seconds. Its first Zetaris registration returned 502, not the upstream 429; the cause of that difference remains unresolved. See the [issue write-up](sql/known_to_fail/ISSUE.md).
 
-The more likely cause is rate limiting on the source API. Against Singapore's data.gov.sg PM2.5 endpoint, the documented limit ("5 requests/minute") turned out to be optimistic — repeated `curl` testing tripped a `429` after roughly 5-6 requests within 5-8 seconds, recovering to `200` again after about 30 seconds. This tripped on that source's *first* `CREATE LIGHTNING REST TABLE` run, with no other query run first — one visible SQL statement does not necessarily mean only one HTTP request reached the endpoint (see the next entry below for direct proof of that general mechanism on a different source). That said, this specific case surfaced as a 502 rather than a passed-through 429 — a distinction worth not glossing over; see `sql/known_to_fail/ISSUE.md` for why that matters and what's still unresolved about it.
-
-**Fix:** wait roughly 30 seconds and re-run the `CREATE LIGHTNING REST TABLE` statement, rather than retrying immediately or adding headers that the API doesn't actually require. Avoid `curl`-testing the same endpoint again right before retrying. If a 502 persists after waiting, check the API's own status directly (repeated `curl` calls a minute or so apart) before assuming it's a Zetaris-side problem.
-
-This is exactly the pattern the Singapore PM2.5 source hit. It's kept in `sql/known_to_fail/` as a documented, reproducible example rather than deleted — the other sources in this catalog already cover the JSON-shape range needed, so it was set aside rather than pursued further. See `sql/known_to_fail/ISSUE.md` for the full reproduction and a root-cause hypothesis for engineering; if you hit this same failure mode on a different source, that document is a useful template for writing it up.
+Wait about 30 seconds before retrying a rate-limited endpoint. Avoid probing it with repeated `curl` calls immediately beforehand. If 502s persist, check the source API again at a slower interval.
 
 ### A REST source's HTTP 502 is a cold-start problem, not rate limiting — and can surface as a client-side `TTransportException`
 
@@ -227,7 +199,7 @@ V4 renamed the four hierarchy levels, so a column name can mean a different leve
 
 ### A query fails with a rate-limit error well after `CREATE LIGHTNING REST TABLE` already succeeded
 
-On NASA NeoWs, the `CREATE LIGHTNING REST TABLE` and `CREATE SCHEMASTORE VIEW` statements succeeded, and an early `SELECT` against the view worked fine — but a later, ordinary `SELECT` further down the same script failed with:
+On NASA NeoWs, registration and an early SELECT succeeded; a later SELECT returned:
 
 ```
 REST API call failed: Server returned HTTP response code: 429 for URL: https://api.nasa.gov/neo/rest/v1/neo/browse?api_key=DEMO_KEY
@@ -235,45 +207,43 @@ REST API call failed: Server returned HTTP response code: 429 for URL: https://a
 Response body: <html><body><h1>OVER_RATE_LIMIT</h1><p>You have exceeded your rate limit...
 ```
 
-The URL in the error is the *original REST endpoint*, not anything Zetaris-internal — meaning that plain `SELECT` re-issued a live HTTP request to the source API, exactly like the `CREATE TABLE` statement did. A Lightning REST table does not appear to be materialized once and reused; each query that touches it (directly, or through a view built on it) triggers a fresh call to the underlying endpoint. Running a script's full set of verification and example queries against the same table can add up to many more requests than it looks like from reading the SQL, and will exhaust a strict rate limit partway through a session that started working fine.
-
-This "one query, multiple HTTP calls" mechanism doesn't fully explain the Singapore PM2.5 failure case (`sql/known_to_fail/`) — that source returned an HTTP 502, not a 429, and Zetaris demonstrably *can* relay a clean 429 with the upstream error body intact (as shown above), so a 502 instead is a different failure signature. The repeated-requests mechanism is still probably part of why that source fails at all, but the specific reason it surfaces as a 502 there and a 429 here remains unresolved — see `sql/known_to_fail/ISSUE.md` for the full reasoning.
+The error URL was the source endpoint. A REST table is registered at CREATE time, but an uncached query fetches the endpoint again. Repeated SELECTs can therefore exhaust rate limits. This does not explain the distinct PM2.5 502; its cause remains unresolved in the [issue write-up](sql/known_to_fail/ISSUE.md).
 
 **Workaround:** cache the raw REST table right after creating it, before running further queries, using the `CACHE TABLE` statement:
 ```sql
 CACHE TABLE <logical_datasource_name>.<raw_table_name>;
 ```
-This loads the table into memory once so later queries read the cached copy instead of re-fetching. Against `company_dns.sic_codes_raw`, an uncached `SELECT COUNT(*)` took `Query Time: 49.685s` (Zetaris's own UI-reported figure — the HTTP round-trip to the live endpoint dominates this); after `CACHE TABLE company_dns.sic_codes_raw;`, the identical query dropped to a stable ~1.2s across repeated runs — roughly a 40x improvement. Whether caching the raw table also speeds up a `SCHEMASTORE VIEW` built on top of it hasn't been separately tested — check the same way (time a `SELECT` against the view before and after caching the underlying raw table) if that matters for your use. Release a cached table with `UNCACHE TABLE <same_name>;` when done.
+Caching `company_dns.sic_codes_raw` reduced the UI-reported count query from 49.685 seconds to about 1.2 seconds. Whether that cache also speeds up dependent SchemaStore views has not been tested. Use `UNCACHE TABLE <same_name>;` to release it.
 
-This is Zetaris's "Explicit Caching," and it's the same statement as Spark's own `CACHE TABLE` — not a separate command like "CACHE OFFSITE TABLE," which doesn't exist. The Zetaris SQL Manual documents only the bare form shown above, identical to [Spark's `CACHE TABLE`](https://spark.apache.org/docs/latest/sql-ref-syntax-aux-cache-cache-table.html). The Kbase does name a second, distinct feature, "Adaptive Cache," but it's video-only with no written spec, so its mechanics remain unconfirmed. This is why plain `CACHE TABLE` has no TTL/storage option and why `SHOW CACHE TABLES` doesn't reflect it — see [`docs/guides/zetaris-lightning-sql-companion.md` section 5](../../docs/guides/zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses) for the full picture and a Zetaris-native alternative worth testing instead: `INSERT INTO FUSIONDB.<table> SELECT ...` (Materialization), which writes a real persistent copy rather than a volatile session cache.
+`CACHE TABLE` is explicit in-memory caching. It is distinct from Adaptive Cache; its persistence and status reporting are limited. `SHOW CACHE TABLES` does not prove explicit-cache membership. See the [SQL companion](../../docs/guides/zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses) for details and materialization options.
 
-If `CACHE TABLE` doesn't help, the practical fallback is to space out or reduce the number of queries run against a rate-limited source in one sitting, and to prefer a source's free registered API key over its anonymous/demo access when iterating on queries. NASA sources share one `DEMO_KEY` quota — register a free key directly at [api.nasa.gov](https://api.nasa.gov/) (first name, last name, email — key emailed back immediately, no approval wait), which raises the limit from DEMO_KEY's 30 req/hour (50/day) to 1,000 req/hour. The limit resets on a rolling basis per key, not a fixed clock hour — if `DEMO_KEY` is exhausted, the wait is up to an hour from your first request in the current window, not a short pause.
+If caching does not help, reduce or space out queries and use a registered key where available. NASA's `DEMO_KEY` allows 30 requests/hour and 50/day per IP; a free key allows 1,000/hour. The shared quota resets on a rolling basis.
 
 ### Can I `DROP` a REST table or its Lightning database?
 
-Not reliably — see "Removing a source" above. `DROP VIEW` works; `DROP TABLE` and `DROP DATASOURCE` do not. Use the Zetaris Data Explorer to remove the underlying registration.
+On 12 October 2026, `DROP LIGHTNING DATABASE TABLE` removed one PokeAPI REST table on Zetaris 2.4.3.1. See "Removing a source" above for the exact command and limits. This does not establish that generic `DROP TABLE` works for every connector.
 
 ### `CREATE SCHEMASTORE CONTAINER` failed with "A container named ... already exists"
 
-This means the container name already exists — `CREATE SCHEMASTORE CONTAINER` has no `IF NOT EXISTS` form (older versions reported it as a parse exception). Re-running the script with `python3 scripts/run_sql.py --skip-exists FILE` skips every "already exists" error (database, table, container and view), or comment out that statement and continue; see `docs/guides/zetaris-lightning-sql-companion.md` section 5.
+`CREATE SCHEMASTORE CONTAINER` has no `IF NOT EXISTS` form. If it already exists, skip that statement or use `python3 scripts/run_sql.py --skip-exists FILE`; see the [SQL companion](../../docs/guides/zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses).
 
 ### `CREATE LIGHTNING DATABASE ... DESCRIBE BY "..."` failed with "Description is invalid"
 
-The `DESCRIBE BY` string only accepts letters, digits, spaces, and `_ . - ,` — nothing else (see `docs/guides/zetaris-lightning-sql-companion.md` section 5). The error text names `_`, `.`, `-`, and `,` explicitly but doesn't mention that plain spaces are fine (they are — every live-tested script's own `DESCRIBE BY` uses them). It's punctuation like parentheses, slashes, or colons that fails, e.g. `"... (division/major group)"` — rewrite as `"... - division, major group"` (hyphen and comma instead of parens and slash) and it passes. This check runs before Zetaris does anything else with the statement — the REST endpoint isn't even contacted, so don't waste time debugging the `endpoint`/`HEADER`/`BODY` clauses on this error, it's purely the description text.
+`DESCRIBE BY` accepts letters, digits, spaces, `_`, `.`, `-`, and `,`. Parentheses, slashes, and colons fail. For example, replace `"... (division/major group)"` with `"... - division, major group"`. This validation runs before Zetaris contacts the endpoint.
 
 ### How do I query a table once it's inside a Virtual Data Mart?
 
-Not documented anywhere in the Zetaris Kbase — the VDM Overview page, "Processes for Automation: Virtual Data Mart creation / deletion," and Query Director's own page (which is about Spark/Presto engine routing, not VDMs, despite the similar name) all describe *building* a mart but never how to query through one. The syntax is a flat two-part reference, `<mart_name>.<table_name>` — not `<mart_name>.<original_container>.<table_name>`. The mart drops the original `SCHEMASTORE CONTAINER` prefix (e.g. `edgar.`, `company_dns.`) entirely and exposes each dragged-in table under the mart's own name, using whichever alias the VDM canvas shows as that node's "Virtual Table" name (visible in the mart-builder UI under each table card). Example, a mart named `companies_mart` containing `edgar.all_companies_profile_table`:
+Use `<mart_name>.<table_name>`. The mart omits the original `SCHEMASTORE CONTAINER` prefix and uses the VDM node's "Virtual Table" alias. For example, a mart named `companies_mart` containing `edgar.all_companies_profile_table`:
 ```sql
 SELECT * FROM companies_mart.all_companies_profile_table;
 ```
-not `companies_mart.edgar.all_companies_profile_table`. If a table was renamed on the way into the mart (optional per the VDM Overview's own build steps), query it by that renamed "Virtual Table" alias, not its original source-side name.
+If the VDM renamed the table, use its alias instead of the source name.
 
 ---
 
 ## 5. Basic syntax
 
-Every script uses two Zetaris DDL statements together: `CREATE LIGHTNING REST TABLE`, which registers a REST endpoint's raw JSON response as a queryable table, and `CREATE SCHEMASTORE VIEW`, which flattens that raw JSON into a proper tabular view. This is a different pattern from the Parquet/CSV package's `CREATE LIGHTNING FILESTORE TABLE` (`../parquet_csv/HOWTO.md`) — REST sources don't have a file `PATH`, they have an `endpoint`, `HEADER`, and `BODY`.
+`CREATE LIGHTNING REST TABLE` registers the endpoint response; `CREATE SCHEMASTORE VIEW` flattens it into columns. REST requests use `endpoint`, `HEADER`, and `BODY`, not a file `PATH`. See the [Parquet/CSV guide](../parquet_csv/HOWTO.md) for file tables.
 
 The general shape (the Fast Start above is a filled-in, real version of this):
 
@@ -306,26 +276,26 @@ FROM <logical_datasource_name>.<raw_table_name>
 LATERAL VIEW explode(<array_field>) AS fact;
 ```
 
-`<logical_datasource_name>` works exactly like the Parquet/CSV package's filestore datasource names — it must be registered with `CREATE LIGHTNING DATABASE` before anything can reference it in `FROM`.
+Register `<logical_datasource_name>` with `CREATE LIGHTNING DATABASE` before referencing it in `FROM`.
 
 ---
 
 ## 6. Known limitations
 
-The platform-wide known limitations that apply to this package — `CREATE SCHEMASTORE CONTAINER`'s no-`IF NOT EXISTS` behavior, teardown (`DROP VIEW`/`DROP TABLE`/`DROP DATASOURCE`), the "a REST table re-fetches on every query" behavior and the `CACHE TABLE` workaround (including what `CACHE TABLE` actually is — see "Troubleshooting / FAQ" above), the JSON-POST-body gap, `DESCRIBE BY`'s restricted character set, and the row-count under-reporting issue — live in [`docs/guides/zetaris-lightning-sql-companion.md` section 5](../../docs/guides/zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses), alongside the same limitations for the Parquet/CSV and USL packages. Read that section before running any script — these are hard limits observed in the current Zetaris version, not suggestions.
+See the [SQL companion](../../docs/guides/zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses) for platform limits on containers, teardown, request re-fetching, cache behavior, JSON bodies, `DESCRIBE BY`, and row counts.
 
-Two items stay here because they're specific to this package's source list, not a platform limitation:
+Two issues are specific to these sources:
 
-- **One source in this package is excluded from the main sequence:** Singapore's data.gov.sg PM2.5 API returned an HTTP 502 on its first `CREATE LIGHTNING REST TABLE` statement. See `sql/known_to_fail/ISSUE.md` for the full investigation and `sql/known_to_fail/README.md` for how this package tracks that kind of source generally.
-- **`getCubeMetadata` (a natural follow-up for Statistics Canada WDS) is blocked**, not just theoretically at risk — it strictly requires `Content-Type: application/json` and rejects the form-urlencoded body this package's scripts use with `415 Unsupported Media Type`, tested directly via `curl`. This is the concrete case behind the companion guide's general "no confirmed way to send a raw JSON body" limitation.
+- Singapore PM2.5 registration returned HTTP 502; see its [issue](sql/known_to_fail/ISSUE.md).
+- StatCan's `getCubeMetadata` requires `Content-Type: application/json`; the form-encoded request returned 415 in direct `curl` testing. This is the package's example of the JSON-body limitation.
 
 ---
 
 ## 7. Understanding JSON response shapes
 
-The general technique — which shape needs `explode()`, plain dot-access, or the dynamic-key decode trick, and the identifier-quoting/numeric-string gotchas that go with it — is explained once in the companion guide; read [`docs/guides/zetaris-lightning-sql-companion.md` section 2](../../docs/guides/zetaris-lightning-sql-companion.md#2-rest-tables-the-shape-you-must-plan-for-before-writing-sql) and [section 3](../../docs/guides/zetaris-lightning-sql-companion.md#3-decoding-dynamic-key-map-shaped-json) before writing a new script's `SELECT` rather than re-deriving it here.
+See the [SQL companion's REST-shape sections](../../docs/guides/zetaris-lightning-sql-companion.md#2-rest-tables-the-shape-you-must-plan-for-before-writing-sql) for `explode()`, dot-access, dynamic keys, and field types.
 
-What's specific to this package is which source lands in which shape bucket, so you know what you're dealing with before opening a script:
+Source shapes in this package:
 
 1. **Top-level object, array-of-structs field(s)** (companion guide §2, case 1) — EDGAR, PokéAPI, Open Food Facts live API, NASA NeoWs, and the `company_dns` V4, EU NACE and Japan endpoints (a flat array of objects directly under `data`, so a plain `explode(data)` is enough). PokéAPI nests a struct *inside* the array's struct (`ability.ability.name`, two levels deep, confirmed working). Open Food Facts' `ingredients` array goes further still — some entries are compound ingredients carrying their own nested `ingredients` sub-array (e.g. a biscuit's "Céréale" entry breaking down into wheat flour and whole wheat flour) — a single `explode()` only reaches the top-level entries; going deeper would need a second `explode()`, not built in that script.
 2. **Array-of-structs nested under a non-array wrapper key** (companion guide §2, case 2) — Singapore's PM2.5 API (`sql/known_to_fail/`, see "Known limitations" above): the array lives at `data.items`, each item's per-region breakdown (`readings.pm25_one_hourly`) is itself a fixed struct, not an array.
@@ -333,10 +303,10 @@ What's specific to this package is which source lands in which shape bucket, so 
 4. **Dynamic-key ("map-shaped") object** (companion guide §3) — Eurostat, the Australian ABS Data API, and `company_dns`'s V3 SIC lookup (see the Fast Start above; its V4 endpoint dropped the dynamic keys) all use the `from_json(to_json(...), 'map<...>')` coercion technique. For Eurostat specifically, the sparse `value` object is addressable two ways — a low-risk option (direct backtick-quoted dot-access to specific known-present numeric keys, e.g. `` value.`522` ``) and the higher-risk full-decode coercion, which needs to be applied to *every* dynamic-key object exploded in the same query — see `sql/non_rate_limited/07_eurostat_create.sql`'s caveats for the exact error a partial application produces. Whether the same technique helps ABS's doubly-compound-key structure is untested and likely harder, since ABS needs two levels of key decoding, not one.
 5. **Flat struct, no array anywhere** — Open Food Facts' `product.nutriments`, plain dot-access all the way down (`product.nutriments.sugars_100g`), no `LATERAL VIEW explode()` involved. Don't reach for `explode()` reflexively on every nested field; check whether the JSON node is actually an array first.
 
-Not yet hit in this package: a **parallel-arrays** shape (separate `times: [...]` / `values: [...]` meant to be read pairwise) — would need `posexplode()` + positional indexing instead of a plain `explode()`. Confirm the actual JSON shape (`curl` or the browser) before writing a new script's `SELECT`; don't assume array-of-structs is universal.
+No source here uses parallel arrays such as `times: [...]` and `values: [...]`. That shape needs `posexplode()` and positional indexing; inspect the response before writing a query.
 
 ---
 
 ## 8. Everything else
 
-For license details and per-source docs links, see `rest-api-sources.md` in this package. For which onboarding pattern (`CREATE LIGHTNING REST TABLE` vs. `CREATE LIGHTNING FILESTORE TABLE` vs. `CREATE DATASOURCE`) fits a source you're adding, see [`docs/guides/zetaris-lightning-sql-companion.md` section 1](../../docs/guides/zetaris-lightning-sql-companion.md#1-the-two-onboarding-patterns-this-repo-has-proven). For every other category (Kafka, filestore Parquet/CSV, logs, SQL RDBMS, PDFs, and the government open-data sections), see the roadmap in `../../docs/plans/FUTURES.md` and its per-category `docs/plans/recipes/*.md` files — the original research behind them is archived at `../../docs/plans/archive/quickstart-data-manifest.md`.
+For licenses and source links, see [`rest-api-sources.md`](rest-api-sources.md). The [SQL companion](../../docs/guides/zetaris-lightning-sql-companion.md#1-the-two-onboarding-patterns-this-repo-has-proven) compares REST, file, and JDBC onboarding. Other categories are tracked in [`docs/plans/FUTURES.md`](../../docs/plans/FUTURES.md).

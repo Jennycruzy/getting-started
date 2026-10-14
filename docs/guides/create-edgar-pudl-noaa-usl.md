@@ -1,13 +1,13 @@
 # Create an EDGAR, PUDL, and NOAA Unified Semantic Layer
 
-**Current prerequisite warning:** PUDL registration is now [known to fail](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md). The earlier successful run is retained as historical evidence and has not been reconciled with the current failure. Do not use this example as default onboarding; first obtain a working registration verified on your target instance.
+**Current prerequisite warning:** PUDL registration is [known to fail](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md). The successful run below is historical and conflicts with that result. Verify PUDL registration on your instance before using this example.
 
 
-This guide reproduces the model created and queried through the local Zetaris JDBC endpoint in this session on 2026-10-01. It is written for humans executing SQL and AI agents operating a JDBC client.
+This guide records a model created and queried over JDBC on 2026-10-01. Treat its outputs as historical examples.
 
 Start with [Connecting Codex to Zetaris](../connections/codex-connection.md). Connect and get a row containing `1` from `SELECT 1;` before registering sources or compiling the USL. The connection check does not depend on a sample database already existing.
 
-The working model is `lightning.metastore.edgar_pudl_demo.edgar_pudl_noaa_usl`. It relates Dominion Energy's SEC revenue facts to PUDL generator data through a SEC CIK/EIA utility crosswalk, then attaches NOAA station observations to the 2025 state-level generation rows.
+The model is `lightning.metastore.edgar_pudl_demo.edgar_pudl_noaa_usl`. It links Dominion Energy SEC facts to PUDL generators through a SEC CIK/EIA utility crosswalk, then adds NOAA observations to 2025 state-level generation rows.
 
 Follow these steps in order:
 
@@ -43,13 +43,13 @@ flowchart LR
     Utility -->|weather_period_key for 2025| Weather
 ```
 
-The PUDL crosswalk is probabilistic and can contain incomplete or incorrect matches. Treat its CIK-to-utility association as an analysis link, not proof that the SEC company owns every generator in the matched utility's records. [PUDL crosswalk documentation](https://data.catalyst.coop/preview/pudl/core_sec10k__assn_sec10k_filers_and_eia_utilities).
+The PUDL crosswalk uses probabilistic matching and may contain errors or missing matches. Treat CIK-to-utility links as analytical associations, not proof of ownership. See the [crosswalk documentation](https://data.catalyst.coop/preview/pudl/core_sec10k__assn_sec10k_filers_and_eia_utilities).
 
-In the successful run, each selected NOAA station contained 37 observed days from **2025-01-01 through 2025-02-06**. These station observations are partial weather context. They are not a full-year climate average or a statewide weather measure. The guide keeps the observed dates and day count in the USL output.
+The recorded run had 37 observed days per station, **2025-01-01 through 2025-02-06**. This is a partial station series, not a full-year or statewide weather measure; the USL keeps the date range and day count.
 
 ## 1. Connect first and establish execution scope
 
-Follow the [connection guide](../connections/codex-connection.md), using the driver included in `zetaris-platform`:
+Follow the [connection guide](../connections/codex-connection.md). The driver included in `zetaris-platform` uses these local defaults:
 
 | Setting | Local default |
 |---|---|
@@ -58,23 +58,23 @@ Follow the [connection guide](../connections/codex-connection.md), using the dri
 | JDBC URL | `jdbc:zetaris:lightning@localhost:10000` |
 | Credentials | Your assigned Zetaris user ID and password |
 
-Use the actual host and port if your instance differs from that default. `localhost` means the machine running the JDBC client. A local database on your laptop is not automatically reachable as `localhost` from an agent running on another host.
+Use your instance's host and port if they differ. `localhost` is the JDBC client's machine, which may not be the agent's host.
 
-Use Zetaris Lightning SQL through the supplied driver. Do not initialize Spark or create a local `SparkSession`. Human readers can use their JDBC client; AI agents should use the same direct JDBC route described in the connection guide. No repository application changes are needed to create this model.
+Use Zetaris Lightning SQL through the supplied driver; do not start Spark or create a local `SparkSession`. No application code changes are needed.
 
-Run one SQL statement per JDBC request and wait for its final result before issuing a dependent statement. Keep the JDBC connection open through caching and the queries that consume the cache where your client allows it. The exception to ordinary semicolon splitting is the `COMPILE USL ... DDL` block in step 7: all four `CREATE TABLE` definitions are one compile payload.
+Send one SQL statement per JDBC request and wait for completion before dependent statements. Keep the connection open through caching and its queries where possible. Step 7's four-table `COMPILE USL ... DDL` is one payload; do not split on semicolons.
 
-Set a real SEC application/contact identity before running the REST registration below. Replace `YOUR_APP_NAME YOUR_CONTACT_EMAIL`; do not automatically reuse the database login as the SEC contact. Keep database credentials out of SQL files, source control, and reports.
+Before SEC registration, replace `YOUR_APP_NAME YOUR_CONTACT_EMAIL` with a real application name and contact email. Do not reuse the database login or put credentials in SQL, source control, or reports.
 
 ## 2. Inspect existing registrations and choose a model name
 
-The registration commands below are for missing objects. Reuse matching existing objects rather than rerunning every `CREATE` statement.
+Create only missing objects. Inspect matching existing registrations before proceeding.
 
 ```sql
 SHOW LIGHTNING DATABASES;
 ```
 
-For each database already present, inspect its tables:
+For each existing database, inspect its tables:
 
 ```sql
 SHOW LIGHTNING TABLES SEC_DATA;
@@ -88,13 +88,13 @@ SHOW LIGHTNING TABLES PUDL_S3;
 SHOW LIGHTNING TABLES NOAA_GHCN_S3;
 ```
 
-Only run these table-listing statements when the corresponding database exists. `SHOW DATASOURCES` alone is not a complete inventory of the Lightning REST/file databases used here.
+Run table listings only for databases that exist. `SHOW DATASOURCES` does not list all Lightning REST/file databases.
 
-Use the namespace and USL name shown in this guide for a fresh model. If `edgar_pudl_noaa_usl` already exists, inspect it in the USL interface before proceeding. `IF NOT EXISTS` should not be treated as an update operation. To build a separate version, choose a new USL name and replace it consistently in the compile, activation, and verification blocks. Do not remove an existing model merely to make these instructions run.
+For a fresh model, use the namespace and name shown here. If it exists, inspect it first; `IF NOT EXISTS` does not update it. For a separate version, choose a new name and change it in every compile, activation, and verification statement. Do not remove existing models to run this guide.
 
 ## 3. Register the required sources
 
-These are the minimal registrations used by the successful model. The repo's [PUDL script](../../open_data/parquet_csv/sql/known_to_fail/03_pudl_create.sql), [EDGAR script](../../open_data/rest_apis/sql/rate_limited/01_edgar_company_facts_create.sql), and [NOAA script](../../open_data/parquet_csv/sql/02_noaa_ghcn_create.sql) provide the underlying registration patterns. You do not need to register all of their example tables.
+These are the minimum registrations from the successful run. See the [PUDL](../../open_data/parquet_csv/sql/known_to_fail/03_pudl_create.sql), [EDGAR](../../open_data/rest_apis/sql/rate_limited/01_edgar_company_facts_create.sql), and [NOAA](../../open_data/parquet_csv/sql/02_noaa_ghcn_create.sql) scripts. Register only the tables used here.
 
 ### 3.1 SEC EDGAR revenue facts
 
@@ -117,7 +117,7 @@ CREATE LIGHTNING REST TABLE dominion_revenue_facts FROM SEC_DATA REQUEST(
 ) BODY ();
 ```
 
-This is company-wide `us-gaap:Revenues` data from [SEC EDGAR](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data). The response contains several contexts per filing and comparative periods repeated in later filings. Step 8 filters full-year facts and selects the latest filing for each period end.
+This uses company-wide `us-gaap:Revenues` facts from [SEC EDGAR](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data). The response repeats periods across filings; step 8 selects full-year facts and the latest filing per period end.
 
 ### 3.2 PUDL utility mapping and generator history
 
@@ -151,7 +151,7 @@ CREATE LIGHTNING FILESTORE TABLE pudl_eia_yearly_generators FROM PUDL_S3 FORMAT 
 );
 ```
 
-These public-bucket options require no AWS credential values. The `stable` alias can change between PUDL releases. For a reproducible release-specific exercise, replace `stable` with a verified release path; inspect its schemas before reusing the activation SQL. See [PUDL data access](https://docs.catalyst.coop/pudl/en/stable/data_access.html).
+The public-bucket path needs no AWS credentials. PUDL's `stable` alias can change; for reproducible results, use a verified release path and inspect its schemas. See [PUDL data access](https://docs.catalyst.coop/pudl/en/stable/data_access.html).
 
 ### 3.3 NOAA station histories
 
@@ -161,7 +161,7 @@ Create the logical database only if absent:
 CREATE LIGHTNING DATABASE NOAA_GHCN_S3 DESCRIBE BY "NOAA GHCN-Daily S3 filestore source";
 ```
 
-Use the three station files below. This route avoids the full `csv/by_year/2025.csv` scan that took too long in the initial attempt. A station file contains historical observations, so caching it still requires an initial load.
+Use the three station files below instead of scanning the full `csv/by_year/2025.csv` file. Each station file contains historical data and takes time to load into cache.
 
 ```sql
 CREATE LIGHTNING FILESTORE TABLE noaa_va_airport FROM NOAA_GHCN_S3 FORMAT CSV OPTIONS (
@@ -202,11 +202,11 @@ CREATE LIGHTNING FILESTORE TABLE noaa_sc_airport FROM NOAA_GHCN_S3 FORMAT CSV OP
 | NC | `USW00013722` | Raleigh Airport |
 | SC | `USW00013880` | Charleston International Airport |
 
-These are one-station reference series for each state. They do not describe weather at every PUDL plant. The station IDs and names were checked against the NOAA station inventory during the original run. [NOAA GHCN-D documentation](https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily).
+These are one-station series per state, not weather at every PUDL plant. The original run checked station IDs and names against the [NOAA inventory](https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily).
 
 ## 4. Confirm schemas and the CIK-to-utility match
 
-Inspect each source schema before constructing the USL:
+Inspect each source schema before compiling the USL:
 
 ```sql
 DESCRIBE DATASOURCE TABLE SEC_DATA.dominion_revenue_facts;
@@ -224,9 +224,9 @@ DESCRIBE DATASOURCE TABLE PUDL_S3.pudl_eia_yearly_generators;
 DESCRIBE DATASOURCE TABLE NOAA_GHCN_S3.noaa_va_airport;
 ```
 
-Repeat the NOAA description for `noaa_nc_airport` and `noaa_sc_airport`. In the observed schema, NOAA exposed `_c0` through `_c7` as strings. The activation uses `_c1` for `YYYYMMDD` date, `_c2` for element, and `_c3` for data value. Adjust the SQL if your registration exposes different column names. Filtering valid date strings also excludes any header row.
+Repeat the NOAA description for `noaa_nc_airport` and `noaa_sc_airport`. The recorded schema exposed `_c0`–`_c7` as strings; activation uses `_c1` for `YYYYMMDD`, `_c2` for element, and `_c3` for value. Adjust if your schema differs. Valid date filtering excludes a header row.
 
-The PUDL crosswalk must expose `central_index_key` and `utility_id_eia`. The generator table must expose `utility_id_eia`, `report_date`, `state`, `capacity_mw`, and `net_generation_mwh`.
+The PUDL crosswalk needs `central_index_key` and `utility_id_eia`. The generator table needs `utility_id_eia`, `report_date`, `state`, `capacity_mw`, and `net_generation_mwh`.
 
 Check the SEC identity as data, not just as an inferred column:
 
@@ -234,7 +234,7 @@ Check the SEC identity as data, not just as an inferred column:
 SELECT cik, entityName FROM SEC_DATA.dominion_revenue_facts;
 ```
 
-The observed SEC CIK was numeric `715957`; the USL pads it to `0000715957` to match PUDL's string CIK. Confirm the name and CIK are present before using them as non-null keys.
+The recorded SEC CIK was numeric `715957`; the USL pads it to `0000715957` to match PUDL's string key. Confirm both company name and CIK before using them as non-null keys.
 
 Confirm the example's match and reporting coverage:
 
@@ -253,7 +253,7 @@ GROUP BY m.central_index_key, m.utility_id_eia, g.report_date, g.state
 ORDER BY g.report_date, g.state;
 ```
 
-The observed match was CIK `0000715957` to EIA utility `5248`, with nine state/year rows covering NC, SC, and VA for 2023–2025. If the match or coverage differs, resolve that difference before declaring matching foreign keys. The source had 2026 rows with missing generation, so this example deliberately ends in 2025.
+The run matched CIK `0000715957` to EIA utility `5248` and returned nine state/year rows for NC, SC, and VA in 2023–2025. Resolve any different match before treating the foreign keys as valid. PUDL had 2026 rows with missing generation, so this example stops at 2025.
 
 ## 5. Cache the NOAA tables before aggregation
 
@@ -271,9 +271,9 @@ CACHE TABLE NOAA_GHCN_S3.noaa_nc_airport;
 CACHE TABLE NOAA_GHCN_S3.noaa_sc_airport;
 ```
 
-All three commands completed in the successful attempt. The first cache load took about 107 seconds. A slow initial load is not evidence that the subsequent query has failed.
+All three cache commands completed in the recorded run; the first load took about 107 seconds.
 
-Cache completion and query correctness are separate checks. Verify by running step 6. Cache persistence across reconnects and server restarts was not established in this exercise; do not treat caching as durable materialization. Keep the same JDBC connection open where possible, and warm the sources again when required by your deployment. `SHOW CACHE TABLES` is not used here as proof of explicit-cache membership; the repo's [SQL companion](zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses) records limitations with that status command.
+Cache completion does not prove query correctness; run step 6. Persistence across reconnects or restarts is unverified, so treat this as temporary cache, not materialization. Keep the JDBC connection open where possible and reload as needed. `SHOW CACHE TABLES` does not prove explicit-cache membership; see the [SQL companion](zetaris-lightning-sql-companion.md#5-operational-limitations-confirmed-live-not-documentation-guesses).
 
 ## 6. Read the cached weather data and assess its period
 
@@ -299,7 +299,7 @@ GROUP BY state
 ORDER BY state;
 ```
 
-Temperatures and precipitation are divided by 10 to convert the source's tenths of degrees Celsius and tenths of millimetres. `mean_daily_precip_mm` is a mean over recorded precipitation days, not total annual rainfall. The query excludes the `-9999` missing-value sentinel; it does not apply additional NOAA quality-flag filtering.
+The query divides temperatures and precipitation by 10 because NOAA stores tenths of °C and mm. `mean_daily_precip_mm` averages recorded precipitation days; it is not annual total rainfall. The query excludes `-9999` but does not filter other NOAA quality flags.
 
 Observed results from the cached aggregation:
 
@@ -309,7 +309,7 @@ Observed results from the cached aggregation:
 | SC | 37 | 2025-02-06 | 14.351 | 1.441 | 0.978 |
 | VA | 37 | 2025-02-06 | 7.557 | -3.741 | 2.492 |
 
-Check your actual dates. The following SQL uses `_2025_JANFEB` as the weather-period identifier from this run. If the live files now contain a different period, choose an accurate identifier and update it consistently in both the weather and utility activations. Do not label a partial interval as annual weather.
+Check current dates before using `_2025_JANFEB`. If the files cover another period, update the identifier in both weather and utility activations. Do not label a partial period as annual weather.
 
 ## 7. Compile and deploy all four table definitions together
 
@@ -367,13 +367,13 @@ CREATE TABLE utility_state_year (
 );
 ```
 
-A successful compile/deploy confirms the model definitions were accepted. It does not prove that activated tables will return rows.
+Compile/deploy confirms the definitions were accepted, not that activated tables return rows.
 
 ## 8. Activate the tables in dependency order
 
-The successful version activates each source separately and establishes the cross-source relationships with foreign keys. This avoids the direct raw SEC/PUDL join that hit an internal planning error in the first attempt.
+The recorded version activates each source separately and adds cross-source foreign keys. A direct raw SEC/PUDL join hit an internal planning error.
 
-The `COALESCE` expressions satisfy the declared `NOT NULL` schema when source expressions are reported as nullable. They are not substitutes for checking real missing keys. Confirm the source CIK, state, and report year are present; do not accept blank keys or zero IDs as valid business records.
+`COALESCE` satisfies the declared `NOT NULL` schema when source expressions are nullable. It does not validate keys. Check CIK, state, and report year; blank keys or zero IDs are not valid records.
 
 ### 8.1 Company from SEC
 
@@ -422,7 +422,7 @@ FROM (
 WHERE rn = 1;
 ```
 
-`fp = 'FY'` alone is insufficient: the payload also included quarterly contexts from annual filings. The duration filter selects full-year contexts, and the window function chooses the most recently filed value for each period end. This partition is appropriate for the single-company source here; if you extend to multiple companies, partition by CIK and period end. `report_year` is the year of period end. For companies with a non-calendar fiscal year, review the alignment to PUDL's calendar reporting year before reusing this join.
+`fp = 'FY'` also matches quarterly contexts in annual filings. The duration filter selects full-year facts; the window chooses the latest filing per period end. This example has one company. For multiple companies, partition by CIK and period end. `report_year` uses period-end year; check non-calendar fiscal years against PUDL's calendar year.
 
 ### 8.3 Partial weather period from cached NOAA data
 
@@ -476,9 +476,9 @@ WHERE m.central_index_key = '0000715957'
 GROUP BY m.central_index_key, m.utility_id_eia, YEAR(g.report_date), g.state;
 ```
 
-`generator_count` counts generator-source rows at the inspected plant/generator/year grain. `SUM(net_generation_mwh)` ignores missing measurements; it is not proof that every counted generator reported generation. The weather key is deliberately null for 2023 and 2024 because this example has no weather-period table for those years.
+`generator_count` counts source rows at plant/generator/year grain. `SUM(net_generation_mwh)` ignores missing measurements, so the count does not mean every generator reported generation. The weather key is null for 2023–2024 because no weather period is provided for those years.
 
-All four activation commands returned `registered` in the successful attempt. That confirms activation-query registration, not complete execution verification.
+All four activations returned `registered`. This confirms registration, not successful query execution.
 
 ## 9. Query the activated USL and verify the join
 
@@ -489,7 +489,7 @@ SELECT *
 FROM lightning.metastore.edgar_pudl_demo.edgar_pudl_noaa_usl.weather_period;
 ```
 
-The successful run returned three rows, one per station/state, with 37 observed days and 111 valid measurement rows each.
+The recorded query returned three station/state rows, each with 37 days and 111 valid measurements.
 
 Then run the integrated query:
 
@@ -506,7 +506,7 @@ LEFT JOIN lightning.metastore.edgar_pudl_demo.edgar_pudl_noaa_usl.weather_period
 ORDER BY u.report_year, u.state;
 ```
 
-This returned **nine rows** in the successful run: NC, SC, and VA for each of 2023, 2024, and 2025. Weather columns were null for 2023–2024 and populated for 2025.
+The recorded join returned **nine rows**: NC, SC, and VA for 2023–2025. Weather columns were null for 2023–2024 and populated for 2025.
 
 | 2025 state | Generators | Generation MWh | Capacity MW | SEC company revenue USD | Weather station |
 |---|---:|---:|---:|---:|---|
@@ -514,42 +514,44 @@ This returned **nine rows** in the successful run: NC, SC, and VA for each of 20
 | SC | 2 | 108,737 | 79.7 | 16,506,000,000 | `USW00013880` |
 | VA | 27 | 1,883,021 | 4,210.4 | 16,506,000,000 | `USW00013740` |
 
-The company-wide SEC revenue is repeated on each state row. Do not sum that column across states. The corresponding observed SEC revenues were USD 14,393,000,000 for 2023 and USD 14,459,000,000 for 2024. Preserve the separate company/year and utility/state/year grains when aggregating.
+SEC company revenue repeats on every state row; do not sum it across states. The run returned USD 14,393,000,000 for 2023 and USD 14,459,000,000 for 2024. Keep company/year and utility/state/year at separate grains.
 
-These figures are comparison points from the recorded run, not guaranteed outputs from a future `stable` PUDL release or newer SEC filing. Verify current results against the source tables when they differ.
+These are historical comparison values, not guaranteed outputs from a later PUDL release or SEC filing. Check source tables when results differ.
 
 ## 10. Run DQ separately and record its result
 
-The USL guide describes primary and foreign key constraints as generating DQ rules. To try the utility table's relationship checks:
+Primary and foreign keys generate DQ rules. To run the utility table's checks:
 
 ```sql
 RUN DQ TABLE lightning.metastore.edgar_pudl_demo.edgar_pudl_noaa_usl.utility_state_year;
 ```
 
-Wait for actual rule results before calling DQ passed. In this session, the command returned no result within approximately three minutes, and the JDBC client was interrupted. **The DQ outcome remains unverified.** The successful nine-row joined SELECT is separate evidence and does not substitute for a DQ result.
+Wait for rule results before marking DQ passed. The command returned no result within about three minutes and the JDBC client was interrupted. **DQ remains unverified.** The nine-row SELECT is separate evidence.
 
-Set a bounded wait appropriate to your deployment. If you cancel, use your JDBC client's cancellation mechanism and check whether the server operation ended. Disconnecting or interrupting a client alone does not establish server-side cancellation. Do not repeatedly launch the same DQ command while an earlier operation may still be running.
+Use a bounded wait. If you cancel, check whether the server operation stopped; disconnecting a client does not prove cancellation. Do not relaunch DQ while an earlier command may still run.
 
 ## Troubleshooting and reruns
 
 | Symptom | What to do |
 |---|---|
-| `No suitable driver` for `jdbc:hive2://...` | Use the driver class and URL format in the connection guide; do not replace the Zetaris JAR with a Hive driver. |
-| `Connection refused` | Check that the local instance is running and port 10000 is reachable from the JDBC client host. |
-| Database or table already exists | Reuse and inspect the registration; do not blindly retry the same `CREATE`. A slow registration may finish after your client stops waiting. |
-| NOAA column not found | Inspect the current schema. `_c0`–`_c7` are the names observed in this run. |
-| NOAA query takes too long | Wait for the cache loads to finish, use the three station files, and check connection/cache scope. Do not default to a full annual-file scan. |
-| `nullable -> NOT NULL` during activation | Check actual source keys first, then align the activation's nullability to the declared schema. This guide uses `COALESCE` for confirmed example keys. |
-| Activation has an extra/missing column | Match the projection exactly to the table DDL. An earlier utility activation included `utility_name_eia`, which was not declared; removing it resolved that mismatch. |
-| Raw SEC/PUDL cross-source join raises an internal planning error | Use the separate source activations and USL foreign-key relationships shown here. The final joined USL query succeeded in this model. |
-| `NoClassDefFoundError` for `USLTable` or `RemoveUSL` | Record the exact server error and consult the deployment operator. These appeared in the earlier attempt. Caching is not a general fix for missing runtime classes, and the later successful read does not establish why the earlier error disappeared. |
-| DQ does not return within your bounded wait | Report the outcome as unverified, record elapsed time, and check/cancel the operation before another attempt. |
+| Symptom | Action |
+|---|---|
+| `No suitable driver` for `jdbc:hive2://...` | Use the Zetaris driver class and URL from the connection guide. |
+| `Connection refused` | Check the instance and port 10000 from the JDBC client's host. |
+| Database or table already exists | Inspect and reuse the object. A slow registration may finish after the client stops waiting. |
+| NOAA column not found | Describe the current schema; `_c0`–`_c7` are from the recorded run. |
+| NOAA query is slow | Wait for cache completion, use the three station files, and check connection/cache scope. Avoid a full annual scan. |
+| `nullable -> NOT NULL` during activation | Check source keys and align the projection with the declared schema; `COALESCE` does not validate them. |
+| Activation has an extra or missing column | Match the projection to the DDL. Removing undeclared `utility_name_eia` fixed an earlier mismatch. |
+| Raw SEC/PUDL join raises an internal planning error | Use separate source activations and the USL foreign keys shown here. |
+| `NoClassDefFoundError` for `USLTable` or `RemoveUSL` | Record the server error and ask the operator. This occurred in the earlier attempt; the later successful read does not explain why. |
+| DQ does not return within the wait | Keep the result unverified, record elapsed time, and check whether the operation stopped before retrying. |
 
-No USL materialization or durable cache was created in this exercise. The earlier `edgar_pudl_energy_usl` remained alongside the new model because its removal command failed in that attempt. Reuse or version existing models deliberately; avoid cleanup commands that could remove someone else's objects.
+This exercise created no USL materialization or durable cache. The earlier `edgar_pudl_energy_usl` remained because its removal command failed in that attempt. Reuse or version existing models; do not remove another user's objects.
 
 ## Suggested instruction for an AI agent
 
-Attach this guide and the connection guide, then provide credentials through your approved credential mechanism. Use this task prompt after the connection is verified:
+For an AI task, attach this and the connection guide and provide credentials through your approved mechanism. After verifying the connection, use this prompt:
 
 ```text
 Follow the EDGAR/PUDL/NOAA USL guide against the connected Zetaris instance.
@@ -568,6 +570,6 @@ commands that failed or timed out, and the steps you took.
 
 ## Evidence boundary for this guide
 
-Observed in the successful cached-weather attempt: `SELECT 1` returned a row; three NOAA cache commands completed; the raw NOAA aggregation returned three rows; the USL compiled/deployed; all four activations registered; the USL weather SELECT returned three rows; the integrated SELECT returned nine rows. The utility DQ check did not complete within the bounded wait. These steps were executed through JDBC without starting local Spark or editing repository application code.
+The recorded JDBC run returned a row for `SELECT 1`, completed three NOAA cache commands, aggregated three stations, compiled the USL, registered four activations, returned three weather rows, and joined nine rows. DQ did not complete within the bounded wait. No local Spark session or application-code changes were used.
 
-This document reconstructs those successful SQL blocks from the session. Source names and paths were checked against the repository patterns while writing the guide; the complete guide has not been rerun from an empty instance as a new end-to-end installation test.
+The guide reconstructs that run; it has not been rerun from an empty instance. Its successful PUDL result conflicts with the current known failure noted above.

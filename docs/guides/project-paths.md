@@ -1,51 +1,42 @@
 # Choose what to build
 
-Once [your first dataset](first-dataset.md) works, choose a question you want to answer. These are ideas to help you start. Check [available recipes](recipe-readiness.md) before adding another source.
+Choose a question you want to answer. Use [Cookbooks](recipe-readiness.md) to find a sample source and its limits. The ideas below can start with any source that fits; PokéAPI is one optional starter.
 
 ## Hackathon tracks
 
-The [Open Agent Hackathon 2026](https://hackathon.genai.works/event/open-agent-hackathon-2026) lists these tracks:
-
-| Track | Focus |
-|---|---|
-| Solving Fragmented Intelligence | Discover and work across fragmented data sources. |
-| The Agent That Can Explain Why | Investigate questions across sources and produce evidence-backed answers. |
-| Reasoning Architecture | Turn data, knowledge, memory and reasoning into reliable decisions and actions. |
-| Wildcard [Tinkerer] | Extend an existing project with Zetaris and Meterless; judging scores the new work. |
-
-Check the event page's rules before choosing your track. The options below help you get started with data; your hackathon entry should demonstrate the agent's useful work.
+The [event page](https://hackathon.genai.works/event/open-agent-hackathon-2026) lists the current tracks, rules and judging. Choose a track that fits the work your agent will demonstrate.
 
 ## Analyse some data
 
-Start with Pikachu's hidden abilities, or try a query from a recipe's `_select.sql` file after setting up its required tables.
+Start with a small sample from a Cookbook, or use the [PokéAPI starter](first-dataset.md). Then:
 
 1. Write your question.
 2. Check what each row and field means.
-3. Write a query and compare a few results with the source.
+3. Query the data and compare a few results with the source.
 4. Save the SQL and explain what you found, including any gaps.
 
 ## Combine sources
 
-Choose a second source. Check the join key and what each row represents. Look for duplicates and missing matches. Company names alone often aren't enough to join records.
+Choose a second source. Check the join key and what each row represents. Look for duplicates and missing matches; company names alone often are not enough to join records.
 
 Try these guides:
 
-- [VDM and USL](zetaris-lightning-sql-companion.md) explains the options and limits. VDM creation uses the GUI.
-- [EDGAR and SIC](../../open_data/usl/HOWTO.md) walks through a USL model, relationships and data-quality checks. It records a foreign-key check failure and open questions about materialisation.
-- [EDGAR, PUDL and NOAA](create-edgar-pudl-noaa-usl.md) is an advanced walkthrough. PUDL is currently blocked, its weather period is partial, and its data-quality result hasn't been verified. Resolve those before relying on its results.
+- [VDM and USL](zetaris-lightning-sql-companion.md) compares the SQL and model options, with their tested limits.
+- [EDGAR and SIC](../../open_data/usl/HOWTO.md) walks through a USL model, relationships and data-quality checks. The foreign-key check found one invalid record; materialisation remains unverified.
+- [EDGAR, PUDL and NOAA](create-edgar-pudl-noaa-usl.md) is an advanced walkthrough. PUDL is blocked, its weather period is partial, and its data-quality result is unverified.
 
-On the shared instance, replace all sample database, container, namespace and model names with your assigned names. Use shared sources only with read permission, and leave other teams' objects alone.
+On the shared instance, replace sample database, container, namespace and model names with your assigned names. Use shared sources only with read permission. Leave other teams' objects alone.
 
-Save the joined result and explain any duplicates, missing matches or gaps in the dates.
+Save the joined result and explain any duplicates, missing matches or date gaps.
 
 ## Build an app or chart
 
-Use a query result in a simple interface. Show the real data and make errors visible. Keep platform credentials on the server, out of browser code. A deployed app also needs its own access and authentication setup.
+Show real query results in the interface and make errors visible. Keep platform credentials on the server, out of browser code. A deployed app needs its own access and authentication setup.
 
-The [PUDL chart example](../../examples/pudl-chart/README.md) uses Python and a local HTML chart. It's available once PUDL works on your instance. Its sample data can help check the chart layout, but you still need a real query to show the connection works.
+The [PUDL chart example](../../examples/pudl-chart/README.md) uses Python and a local HTML chart. Its sample data can check the layout, but a real query is needed to show the connection works. The example is available once PUDL works on your instance.
 
-PUDL's energy-source codes describe fuel categories. They don't measure generation. For generation analysis, register and check the generator table first.
+PUDL's energy-source codes describe fuel categories, not generation. For generation analysis, register and check the generator table first.
 
 ## Prepare your demo
 
-Use the [demo template](demo-template.md). Save the setup, query and result, and note anything you haven't checked. Check the [event page](https://hackathon.genai.works/event/open-agent-hackathon-2026) for submission details.
+Use the [demo template](demo-template.md) to record your setup, query and result, including anything you have not checked. Follow the [official event rules](https://hackathon.genai.works/event/open-agent-hackathon-2026) for submission details.

@@ -1,12 +1,8 @@
 # Zetaris SQL Companion: Tips, Tricks, and Limitations
 
-**Status:** 🟡 Draft — first pass assembled from confirmed, live-tested findings in this repo's `open_data/rest_apis/` and `open_data/parquet_csv/` packages, plus the USL User Guide. section 1-7 (REST/Parquet/SchemaStore/VDM) reflect things that have actually been run against a live Zetaris instance. section 8 (USL) is mostly written from the USL User Guide alone and not yet live-tested against this repo's sources, except 8.6 (`REGISTER DQ`'s confirmed limitations), which is live-tested — live verification of the rest of section 8 is tracked separately in [`docs/plans/archive/usl-build-plan.md`](../plans/archive/usl-build-plan.md), not in this document; section 10 below explains why the split.
+**Status:** Live findings are scoped to the version, fixture and SQL form tested. USL notes from the supplied guide are marked separately.
 
-This is a working reference, not a tutorial, and it is a **companion to the Zetaris SQL Guide and SQL Manual**, not a replacement for either — it exists to record the gap between what those documents say and what a live instance actually does, indexed by the same topics they cover. Each item names the source script/doc it came from so a claim can be re-verified rather than taken on faith. Where a Kbase page is silent or disagrees with live behavior, live behavior (as recorded in `open_data/*/HOWTO.md` and the `sql/*.sql` headers) wins — that disagreement is exactly what's worth writing down here.
-
-**Why this lives in `docs/guides/`, not `docs/plans/`:** `docs/plans/` is for plans to build or improve something in this repo (see `docs/plans/FUTURES.md` and its `recipes/`). This document isn't a plan — it's a reference someone consults *while writing SQL*, the way they'd consult the Kbase itself. The plan for *validating* the USL section below lives in `docs/plans/archive/usl-build-plan.md`, exactly where a plan belongs; its findings feed back into section 8 here once confirmed.
-
----
+Use this beside the [Zetaris SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide) and [SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual). Those docs define syntax. This page records useful source patterns, confirmed behaviour and limits for this repo.
 
 ## Table of contents
 
@@ -16,54 +12,50 @@ This is a working reference, not a tutorial, and it is a **companion to the Zeta
 3. [Decoding dynamic-key ("map-shaped") JSON](#3-decoding-dynamic-key-map-shaped-json)
 4. [Self-joins against `UNION ALL`-of-`explode()` views](#4-self-joins-against-union-all-of-explode-views-use-window-functions)
 5. [Operational limitations (confirmed live)](#5-operational-limitations-confirmed-live-not-documentation-guesses)
-6. [Verifying data — the non-negotiable discipline](#6-verifying-data--the-non-negotiable-discipline)
-7. [Virtual Data Marts (VDM) — the SQL-free consumption layer](#7-virtual-data-marts-vdm--the-sql-free-consumption-layer-and-where-usl-changes-this)
+6. [Verifying data](#6-verifying-data--the-non-negotiable-discipline)
+7. [Virtual Data Marts (VDM): SQL commands and tested limits](#7-virtual-data-marts-vdm--the-sql-free-consumption-layer-and-where-usl-changes-this)
 8. [The Unified Semantic Layer (USL)](#8-the-unified-semantic-layer-usl-a-scriptable-alternativesuccessor-to-vdm)
-9. [Open questions to close before validating this guide](#9-open-questions-to-close-before-validating-this-guide)
-10. [Related documents in this repo](#10-related-documents-in-this-repo)
+9. [Open questions](#9-open-questions-to-close-before-validating-this-guide)
+10. [Related documents](#10-related-documents-in-this-repo)
 
 ---
 
 ## 0. Companion map — this guide vs. the Zetaris Kbase
 
-Read this guide's sections *alongside* the linked Kbase page, not instead of it — the Kbase has the authoritative syntax and options list; this guide has the parts that only showed up under live testing (quirks, undocumented behavior, confirmed workarounds). Kbase page titles below are exactly as they appear in the "Using Zetaris" nav (checked 2026-09-23).
+Use the Kbase for full syntax and options. This guide adds repo examples and tested behaviour.
 
-| This guide | Zetaris Kbase page(s) | What the Kbase covers that this guide doesn't |
+| Topic | Kbase reference | Scope here |
 |---|---|---|
-| section 1 (onboarding, `CREATE LIGHTNING DATABASE`) | [Zetaris SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide) → "Connection and Registration Statements"; [Data source overview](https://kbase.zetaris.com/knowledge/connect) | Full statement grammar, the complete list of supported file formats/connection types |
-| section 2-4 (REST/JSON shapes, quoting, window functions) | [Zetaris SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide) → "Pipeline and View Statements"; [Zetaris SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual) | `CREATE LIGHTNING REST TABLE`/`CREATE SCHEMASTORE VIEW` grammar reference; the Manual's own worked examples (source for the confirmed `CACHE TABLE` syntax used in section 5) |
-| section 5 (`CACHE TABLE`, `DROP`/`SHOW`, rate limits) | [Zetaris SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide) → "Auxiliary Statements" (`SHOW CACHE TABLES` is listed here with no worked example — see section 5's own note on why that matters) | The statement list itself; this guide adds what actually happens when you run them |
-| section 6 (verifying data) | [SQL Editor](https://kbase.zetaris.com/knowledge/sql-editor-overview), [How to Save and Re-use SQL](https://kbase.zetaris.com/knowledge/how-to-save-and-re-use-sql), [Data Catalog Overview](https://kbase.zetaris.com/knowledge/data-catalog-overview) | The SQL Editor's UI mechanics, result-grid/pagination basics |
-| section 7 (Virtual Data Mart) | [Virtual Data Mart Overview](https://kbase.zetaris.com/knowledge/virtual-data-mart-overview), [Processes for Automation: Virtual Data Mart creation / deletion](https://kbase.zetaris.com/knowledge/processes-for-automation-virtual-data-mart-creation-/-deletion), [Virtual Pipeline Guide](https://kbase.zetaris.com/knowledge/virtual-pipeline-guide) | The click-through build/delete steps in full, with screenshots |
-| section 8 (USL) | **No dedicated page found in the Kbase's "Using Zetaris" index as of 2026-09-23** — checked the full nav (Data Catalog, Data Lineage, Data Quality, File System, Query Builder, SQL Editor, User Management, Virtual Data Pipeline, Virtual Data Mart, Query Director; no "Unified Semantic Layer" or "Data Product" entry) and the SQL Guide's statement list (no `ACTIVATE`/`COMPILE USL`/`MATERIALIZE USL` anywhere in it). The supplied "Unified Semantic Layer (USL) — User Guide" is, as far as this repo has found, the only documentation for this feature right now. | — (this is the gap; see section 8's own header note) |
-| Adjacent: Data Quality outside USL | [Data Quality & Exception Management - Technical implementation](https://kbase.zetaris.com/knowledge/data-quality-exception-management-technical-implementation) | **Checked.** A different, CSV-file-driven mechanism -- rules are rows in an uploaded `Business_Rules.csv` (under `/file-store/DQ_EXTERNAL_FILES`, with an active/inactive flag column), consumed through a Tableau dashboard. No `REGISTER DQ`/`RUN DQ`, no SQL rule expressions, no mention of USL at all. This answers the "is it the same subsystem?" question: it looks like a separate mechanism from USL's own SQL-based DQ rules, not the same one exposed two ways. Neither this page, the [SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual), nor the [SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide) documents `REGISTER DQ`'s actual grammar anywhere -- all three were checked directly and none mention it. The supplied USL User Guide's Appendix B remains the only source for that syntax. |
+| Registration and REST/file tables | [SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide), [Data source overview](https://kbase.zetaris.com/knowledge/connect) | The two patterns and source-specific behaviour |
+| REST shapes, views and SQL workarounds | [SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide), [SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual) | JSON decoding, quoting and self-join limits |
+| Cache and data checks | [SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual), [SQL Editor overview](https://kbase.zetaris.com/knowledge/sql-editor-overview) | Cache behaviour and independent verification |
+| Virtual Data Marts | [Virtual Data Mart overview](https://kbase.zetaris.com/knowledge/virtual-data-mart-overview), [Virtual Pipeline guide](https://kbase.zetaris.com/knowledge/virtual-pipeline-guide) | SQL commands and the tested query path |
+| USL and data quality | Supplied USL User Guide | Guide-only claims and the live-tested limits below |
 
-**If a future pass finds the real USL Kbase page** (a product update, a search-engine hit, a support ticket response), replace the "No dedicated page found" row above with the real link and re-check every USL claim in section 8 against it — right now section 8 is single-sourced from one PDF/markdown guide, which is thinner evidence than everything else in this document.
+The supplied USL guide is the source used here for USL syntax. The SQL Guide and SQL Manual do not document the `REGISTER DQ` commands described in section 8.6.
 
 ---
 
 ## 1. The two onboarding patterns this repo has proven
 
-*Kbase: [SQL Guide → Connection and Registration Statements](https://kbase.zetaris.com/knowledge/sql-guide), [Data source overview](https://kbase.zetaris.com/knowledge/connect).*
-
-| Data shape | DDL entry point | Where |
+| Data shape | SQL entry point | Walkthrough |
 |---|---|---|
-| File-based (Parquet/CSV, S3 or S3-compatible) | `CREATE LIGHTNING FILESTORE TABLE ... FROM <db> FORMAT <fmt> OPTIONS (PATH ..., ...)` | [`open_data/parquet_csv/HOWTO.md`](../../open_data/parquet_csv/HOWTO.md) |
-| REST/JSON API | `CREATE LIGHTNING REST TABLE ... FROM <db> REQUEST(endpoint ..., method ..., response_type "json", ...) HEADER (...) BODY (...)` + `CREATE SCHEMASTORE VIEW` to flatten it | [`open_data/rest_apis/HOWTO.md`](../../open_data/rest_apis/HOWTO.md) |
+| Parquet or CSV on S3/S3-compatible storage | `CREATE LIGHTNING FILESTORE TABLE ... FROM <db> FORMAT <fmt> OPTIONS (PATH ..., ...)` | [Parquet/CSV HOWTO](../../open_data/parquet_csv/HOWTO.md) |
+| REST/JSON API | `CREATE LIGHTNING REST TABLE ...` then a `CREATE SCHEMASTORE VIEW` to flatten it | [REST API HOWTO](../../open_data/rest_apis/HOWTO.md) |
 
-Both patterns share one prerequisite that earlier drafts of this repo got wrong and had to correct after live testing: **`CREATE LIGHTNING DATABASE <name> DESCRIBE BY "<text>"` must be run once, before the first table that references `<name>` in its `FROM` clause.** It is not just a label — a `FROM` referencing an unregistered name fails outright.
+Create the logical database before its first table. A `FROM <name>` reference fails if `CREATE LIGHTNING DATABASE <name>` has not run.
 
 ```sql
 CREATE LIGHTNING DATABASE <logical_datasource_name> DESCRIBE BY "<short description>";
 ```
 
-**`DESCRIBE BY` only accepts a restricted character set** — letters, digits, spaces, and `_ . - ,`. Parentheses, slashes, and colons are rejected before the statement even reaches the endpoint (`"Description is invalid, it must be alphanumeric including the _ (underscore), . (dot), - (hyphen) and , (comma) character"`). Confirmed live 2026-09-21 on `company_dns`'s registration. Write `"SIC reference data - division, major group"`, not `"SIC reference data (division/major group)"`.
+`DESCRIBE BY` accepts letters, digits, spaces, `_`, `.`, `-` and `,`. Parentheses, slashes and colons fail validation. For example, use `SIC reference data - division, major group` rather than `SIC reference data (division/major group)`. This was confirmed while registering `company_dns`; see the [REST source guide](../../open_data/rest_apis/HOWTO.md).
 
 ---
 
 ## 2. REST tables: the shape you must plan for before writing SQL
 
-`CREATE LIGHTNING REST TABLE` registers a raw JSON response as a table; `CREATE SCHEMASTORE VIEW` flattens it. What you write for the flattening step depends entirely on the JSON shape, confirmed across 8+ live sources:
+A REST table exposes the API's JSON response. A SchemaStore view flattens it. Inspect a real response before writing the view.
 
 1. **Top-level object, array-of-structs field(s)** (EDGAR, PokéAPI, Open Food Facts, NASA NeoWs, and `company_dns`'s V4, EU NACE and Japan endpoints, whose `data` is a flat array of objects) — `LATERAL VIEW explode(<array_field>) AS fact` then plain dot-access, `fact.val`. This nests arbitrarily deep (PokéAPI's `ability.ability.name`, two levels deep, confirmed working).
 2. **Array-of-structs nested under a non-array wrapper key** (Singapore PM2.5, `data.items`) — same `explode()`, just applied one level deeper.
@@ -73,21 +65,17 @@ CREATE LIGHTNING DATABASE <logical_datasource_name> DESCRIBE BY "<short descript
 
 **One service, two shapes (`company_dns` V3 and V4).** The same 1,005 SIC codes come back as a dynamic-key object from V3 (decode it with the section 3 technique) and as a flat array of eight fields from V4 (a plain `explode(data)`). V4 also **renamed the hierarchy levels**: V3 `division` (letter) is V4 `section_id`, V3 `major_group` (2-digit) is V4 `division_id`, V3 `industry_group` (3-digit) is V4 `group_id`, V3 `sic_code` is V4 `class_id`, and the `_desc` columns follow. A column name can therefore mean a different level in each version (`division_desc`: "Manufacturing" in V3, a 2-digit division label in V4). When two versions of one source must coexist, expose the other version's column names through a second view (the `_compat_` views in `open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql`) rather than renaming in downstream SQL.
 
-A **parallel-arrays** shape (`times: [...]` / `values: [...]` meant to be read pairwise) hasn't been hit yet but would need `posexplode()` + positional indexing, not a plain `explode()`.
+For parallel arrays that represent paired values, positional expansion such as `posexplode()` may be needed; this pattern has not been confirmed in this repo.
 
-**Confirm the actual shape with `curl` before writing the `SELECT`.** Every failure case in this repo where a field "should" exist but didn't (Singapore's PM2.5 `national` field) traces back to assuming a plausible-sounding field existed instead of checking a real response.
+Use `curl` to inspect the source response before writing SQL. A plausible field name is not evidence that the field exists.
 
 ### Identifier quoting
 
-- **Mixed-case/camelCase JSON keys** need backticks: `` `entityName` ``, not bare or lowercased.
-- **Reserved words** as field names need backticks even if not mixed-case: `` fact.`start` ``.
-- **Hyphens in a key** need backticks for a different reason — unquoted, a hyphen parses as subtraction: `` product.nutriments.`energy-kcal_100g` ``.
-
-General rule: any JSON key with a character a bare SQL identifier can't use (mixed case, reserved word, hyphen, space) needs backticks.
+Use backticks for mixed-case keys, reserved words and keys containing punctuation. Examples: `` `entityName` ``, `` fact.`start` `` and `` product.nutriments.`energy-kcal_100g` ``.
 
 ### Numeric-looking fields that are actually strings
 
-Zetaris's schema inference follows the JSON type as written. A quoted numeric value in the source JSON (`"kilometers": "47112732.928149391"`) infers as STRING, and sorting/comparing it does **lexicographic string comparison** — `"9000000.1"` sorts before `"47112732.9"` because `'9' > '4'`. This fails silently, no error, just a wrong answer. Confirmed on NASA NeoWs (`miss_distance.kilometers` is a quoted string; sibling fields like `estimated_diameter_min` are real numbers in the same response). **Fix: `CAST(... AS DOUBLE)` in the view's own `SELECT`**, once, rather than remembering to cast at every downstream query.
+Zetaris infers the JSON type. A quoted number remains a string, so sorting is lexicographic. Cast it in the view, for example `CAST(... AS DOUBLE)`, before downstream queries. NASA NeoWs returns `miss_distance.kilometers` as a string even though nearby diameter fields are numeric.
 
 ---
 
@@ -95,30 +83,27 @@ Zetaris's schema inference follows the JSON type as written. A quoted numeric va
 
 JSON-stat/SDMX formats (Eurostat, ABS) and some REST APIs (`company_dns`'s V3 SIC lookup; its V4 endpoint returns a plain array instead) return their payload as an object keyed by a computed offset or code (`{"168": 11.8, "169": 11.5}`), not an array-of-structs. There's nothing to `explode()` directly — Spark's schema inference turns this into a STRUCT with one field per observed key, not a MAP.
 
-- **Low risk — a handful of known keys:** backtick-quoted dot-access on the specific key, e.g. `` value.`522` ``. No `explode()` needed.
-- **Higher risk, confirmed working — decode the whole object into rows:** round-trip it through JSON text with an explicit target schema to force the STRUCT into a MAP, then explode that:
-  ```sql
-  from_json(to_json(data.sics), 'map<string, struct<description:string, division:string, ...>>')
-  ```
-  then `LATERAL VIEW explode(...) AS sic_code, sic_val`.
+- For a known key, use backtick-quoted dot access, such as `` value.`522` ``.
+- To turn the full object into rows, convert it to JSON and parse it with a MAP schema, then explode it:
 
-**Critical gotcha, confirmed on Eurostat:** apply this coercion to **every** dynamic-key object you explode in the same query, not just the first one you notice. The first attempt at Eurostat's decode applied it to `value` but exploded `dimension.time.category.index` (also dynamic-key) without it — result: `DATATYPE_MISMATCH` on the second `explode()`. The `value` coercion itself raised no error, proving the technique works once applied consistently everywhere it's needed.
+  `from_json(to_json(data.sics), 'map<string, struct<description:string, division:string, ...>>')`
 
-`to_json`/`from_json` are standard Spark SQL, not Zetaris-specific.
+Apply the conversion to every dynamic-key object you explode in the same query. On Eurostat, converting `value` but not `dimension.time.category.index` caused `DATATYPE_MISMATCH` on the second `explode()`.
 
 ### A JSON-stat source returning empty isn't necessarily "no data"
 
-Eurostat doesn't error on an invalid dimension code — it silently returns an empty category index for that dimension, and therefore an empty top-level `value`. This looks identical to "genuinely no data for this combination." Before concluding there's no data, check `dimension.<name>.category.index` for each filter dimension — an empty list means the code is invalid for that dataset, not that data doesn't exist.
+Eurostat can return an empty category index for an invalid dimension code without an error. Check each filter code against `dimension.<name>.category.index` before concluding the dataset has no data.
 
 ---
 
 ## 4. Self-joins against `UNION ALL`-of-`explode()` views: use window functions
 
-**Error:** `MISSING_ATTRIBUTES.RESOLVED_ATTRIBUTE_APPEAR_IN_OPERATION`
+**Error:** `MISSING_ATTRIBUTES.RESOLVED_ATTRIBUTE_APPEAR_IN_OPERATION`.
 
-**Trigger:** referencing the same view — when that view is a `UNION ALL` of `explode()`-based views — more than once in one query: an explicit self-join, a `WHERE x IN (SELECT ... FROM same_view)`, or a scalar `HAVING x = (SELECT ... FROM same_view)`. Confirmed on both Open Food Facts (explicit self-join) and StatCan WDS (`IN` and `HAVING` subquery forms) — this is a class of failure, not a one-off.
+**Trigger:** referencing the same `UNION ALL`/`explode()` view more than once in a query. This failed with a self-join and with `IN` and `HAVING` subqueries against Open Food Facts and StatCan WDS.
 
-**Fix — rewrite as a single-pass window function:**
+Use one pass with a window function for questions such as “top row per group”:
+
 ```sql
 SELECT key, val
 FROM (
@@ -127,74 +112,65 @@ FROM (
 ) ranked
 WHERE rn = 1;
 ```
-A plain `COUNT(*) OVER (PARTITION BY key)` covers "does this group meet a count threshold" the same way. Standard ANSI/Spark SQL — reach for this pattern by default any time a "top row per group" question comes up against a `UNION ALL`/`explode()` view, rather than discovering the error first.
+
+For a count threshold, use `COUNT(*) OVER (PARTITION BY key)`. This avoids the repeated view reference that triggered the error in the tested examples.
 
 ---
 
 ## 5. Operational limitations (confirmed live, not documentation guesses)
 
-*Kbase: [SQL Guide → Auxiliary Statements](https://kbase.zetaris.com/knowledge/sql-guide) (lists `SHOW CACHE TABLES`; `CACHE TABLE`/`UNCACHE TABLE` themselves are documented in the [Zetaris SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual), not the newer SQL Guide — cross-check both when a statement seems to be missing from one).*
+Live-check scope on 12 October 2026, Zetaris 2.4.3.1: 96 of 144 SQL command entries were exercised. Ninety-five passed; one passed with a limitation; 48 were not attempted. A pass covers only the tested form and fixture. AUTH checks used a dummy token against a public HTTP response; they do not confirm real OAuth or access to a protected service.
 
-- **`CREATE SCHEMASTORE CONTAINER` has no `IF NOT EXISTS`.** Runs exactly once per name; a second run against an existing name is a parse exception. Comment the line out on re-runs.
-- **`SCHEMASTORE CONTAINER` has no removal path at all**, SQL or GUI. Treat it as permanent.
-- **Rate-limited sources: the operator sets the limit, bursts get `429`, and every query is a request unless cached.** For `company_dns` the built-in defaults, as given by the service operator, are 200 requests a minute with a burst of 20 (standard) and 5 a minute with a burst of 1 (strictest), and each deployment can differ. A burst larger than the allowance is rejected with `429` even when the average is low. Spread requests out (run create scripts one statement at a time, waiting 15 seconds or more before each statement that calls the endpoint, and 60 seconds after a `429`), and cache on this side: `CACHE TABLE` on the raw table immediately after creating it, then time the first query (about a second means the views read the cache). One visible statement can send several HTTP requests (Zetaris can retry a failing fetch on a few pooled connections), so do not retry in a loop. The three `company_dns` scripts (`12`-`14`) cache each raw table right after creating it, and ran cleanly on a live instance; the tier and burst figures themselves come from the operator, not from a test here.
-- **A `CREATE LIGHTNING REST TABLE` re-issues its HTTP request on every query that touches it** — directly, or through a view built on it — not just once at `CREATE` time. Confirmed on NASA NeoWs: an early `SELECT` worked, a later ordinary `SELECT` failed with the source API's own `429`, because it re-fetched. Running a full script's create + views + example queries can burn through a strict rate limit partway through.
-  - **Workaround, confirmed ~40x speedup (company_dns, 2026-09-21):** `CACHE TABLE <db>.<raw_table>;` right after creating the raw table. 49.7s uncached `SELECT COUNT(*)` → stable ~1.2s cached. Release with `UNCACHE TABLE <same_name>;` when done.
-  - **Correction (2026-09-28): `CACHE TABLE` is Zetaris's "Explicit Caching," and it's the same statement as Spark's own `CACHE TABLE` — not something Zetaris built independently, and not a separate command like "CACHE OFFSITE TABLE."** Checked directly against the Zetaris SQL Manual §17.2 "Cache/Uncache": the only syntax documented is `CACHE TABLE <name>;` / `UNCACHE TABLE <name>;`, identical to [Spark's own `CACHE TABLE`](https://spark.apache.org/docs/latest/sql-ref-syntax-aux-cache-cache-table.html) — no `LAZY`, `OPTIONS(...)`, or `AS <query>` clause, unlike Spark's fuller grammar, and no statement anywhere in the SQL Manual or SQL Guide named "CACHE OFFSITE TABLE" or containing "OFFSITE" (checked directly — doesn't exist). The Kbase's Product Feature Videos section calls this exact statement **"Explicit Caching"**, in contrast to a second, distinct, named feature, **"Adaptive Cache"** — but both are video-only pages with no written spec (confirmed 2026-09-28: neither page has extractable article text, only a video), so Adaptive Cache's mechanics, whether it's SQL-invoked at all, and any TTL/storage behavior remain genuinely unconfirmed, not just undocumented in this repo. Don't assume `CACHE TABLE`/"Explicit Caching" and "Adaptive Cache" are the same thing under different names — treat Adaptive Cache as a real, separate open question (raise it with your Zetaris contact if it matters for your use case), and treat `CACHE TABLE` itself as Spark's ordinary session-scoped in-memory cache: that fully explains the "known gaps" below (no TTL/storage-tier option, `SHOW CACHE TABLES` not reflecting real state) — it's a thin pass-through to Spark's cache, not a Zetaris-tracked feature.
-  - **A genuinely Zetaris-native durable alternative exists: Materialization (SQL Manual §17.1), not `CACHE TABLE`.** Its documented syntax is a plain `INSERT INTO FUSIONDB.<table> SELECT ... FROM <source>` — writing a real, persistent copy into FusionDB storage, distinct from Spark's volatile cache. For a rate-limited or cold-start-prone REST source, this is very plausibly the more robust fix (a genuine snapshot instead of an in-memory cache with unknown expiry) — **not yet live-tested against any source in this repo**, worth trying before assuming `CACHE TABLE` is as good as it gets.
-  - **Known gaps in `CACHE TABLE` observed live, filed with Zetaris engineering, not solvable from this side:** no configurable TTL or storage tier (a cache has been observed to silently expire); `SHOW CACHE TABLES` reports nothing even when a cache is independently proven active — don't rely on it, time a query before/after instead.
-  - **The SQL `CACHE TABLE` statement and the Data Explorer GUI's own cache action are not interchangeable, and can succeed or fail on the exact same table in opposite directions.** Confirmed on AWS Public Blockchain Data (`open_data/parquet_csv/sql/09_aws_public_blockchain_create.sql`): the SQL `CACHE TABLE` statement failed with an error against `btc_transactions` but succeeded against `eth_transactions`; the GUI's cache action succeeded against `btc_transactions` but failed against `eth_transactions` — the exact opposite pattern, on tables from the same source and script. If one mechanism fails on a table, try the other before concluding the table can't be cached. Separately, an unresolved open question from the same test: every query against both tables succeeded regardless, but `eth_transactions`'s queries ran noticeably faster than `btc_transactions`'s, even though `btc_transactions` was the one successfully cached *first* (via the GUI) and `eth_transactions` second (via SQL) — raising the possibility that caching the second table evicted or invalidated the first table's cache entry, i.e. that Zetaris's cache may not hold one independent entry per table. Not confirmed; see `open_data/parquet_csv/parquet-csv-data-sources.md` #9 for the full reasoning and an untested way to isolate it.
-  - **Confirmed to matter for large filestore tables too, not just REST sources.** NOAA GHCN-Daily's by-year CSV (`open_data/parquet_csv/sql/02_noaa_ghcn_create.sql`) is a single multi-million-row file read off public S3 — its analytical queries (`sql/02_noaa_ghcn_select.sql`) were slow enough uncached that caching was required to get workable query times, not just a performance nice-to-have. The underlying mechanism is different from REST's per-query HTTP re-fetch (here it's a repeated full-file S3 scan), but the fix is the same `CACHE TABLE <db>.<table>;` statement. No precise before/after timing was recorded for this case, unlike `company_dns`'s measured ~40x.
-- **No confirmed way to send a raw JSON POST body.** Every script here uses an empty `BODY()` with `http_encoding "URLENCODED"`. Confirmed blocking: StatCan's `getCubeMetadata` needs `Content-Type: application/json` and 415s on form-encoded. If a source needs a real JSON body, check for an untested `http_encoding "JSON"` before assuming the pattern here works.
-- **Removing a REST or filestore source's underlying registration has no reliable SQL path.** `DROP VIEW` is the only teardown statement confirmed to work reliably. `DROP TABLE` against a Lightning-registered table is inconsistent (works for some sources, fails with an internal catalog error for others, same statement). `DROP DATASOURCE` doesn't reliably remove a `CREATE LIGHTNING DATABASE` registration either — it's meant for JDBC `CREATE DATASOURCE` sources. **The only confirmed removal path is the Data Explorer GUI's "File Source & API" panel.**
-- **Row counts can be under-reported**, independent of source-API behavior. Observed: a results grid showing 10 rows on page 1 while the footer correctly said `Total Count: 11`; separately, a 7-way `UNION ALL` view where the footer itself reported 6, dropping one company. **Filed as a tracked platform issue with Zetaris engineering (2026-09-22).** Always independently verify row counts against the source (`curl`/`jq`, see section 6) before trusting a Zetaris-reported count — but don't assume every discrepancy is this bug either; one "low count" case (Apple's `us-gaap:Revenues`, 11 rows) turned out to be a true reflection of the upstream data, matched exactly by direct `curl`.
-- **`CREATE LIGHTNING FILESTORE TABLE` rejects an S3 bucket name containing a `.`, even with `useS3PathStyleAccess "true"` set.** Confirmed on Catalyst Cooperative PUDL (`open_data/parquet_csv/sql/known_to_fail/03_pudl_create.sql`) — its bucket, `pudl.catalyst.coop`, is the one dotted bucket name across this repo's Parquet/CSV sources, and the one source that fails to register. Path-style addressing is the standard S3-client workaround for dotted bucket names elsewhere (it avoids the TLS SNI/certificate mismatch that virtual-hosted-style addressing hits on a multi-level dotted name), but it does not appear to fix this in Zetaris's connector. The underlying files are directly downloadable outside Zetaris — this is specifically a `FILESTORE TABLE` registration limitation, not a data-availability problem. See that script's `ISSUE-03-pudl.md` for the full writeup, including an unreconciled contradiction: `docs/install/zetaris-installation-test-record.md` separately records an earlier successful run of the identical statement.
-- **A `CREATE LIGHTNING FILESTORE TABLE` can also fail with a 500 error at registration time with no dotted bucket name involved at all** — don't assume the bullet above is the only way registration fails. Confirmed on Ookla Speedtest Global Performance (`open_data/parquet_csv/sql/known_to_fail/07_ookla_speedtest_create.sql`): both its fixed and mobile tile tables fail to register, even though its bucket (`ookla-open-data`) has no dots and the script follows the same public-bucket, single-file `PATH` pattern as NOAA's and AWS Public Blockchain Data's confirmed-working registrations. Unlike PUDL's failure, no specific cause has been narrowed here — see that script's `ISSUE-07-ookla.md` for the open hypotheses (a possibly-stale quarter-dated filename, something about this specific export's size/structure, or a transient issue) and suggested debugging steps.
-- **A filestore table can register successfully and still fail every query against it with a 500 error, independent of the dotted-bucket-name issue above.** Confirmed on three sources: Foursquare Open Source Places (`open_data/parquet_csv/sql/known_to_fail/04_foursquare_places_create.sql`, S3-compatible Source Cooperative endpoint, directory-prefix Parquet `PATH`) fails even its plain, bounded `SELECT * ... LIMIT 10`; Overture Maps Places (`open_data/parquet_csv/sql/known_to_fail/05_overture_maps_create.sql`, AWS S3, directory-prefix Parquet `PATH`) succeeds on the plain bounded `SELECT` at both `LIMIT 10` and `LIMIT 1000`, but fails `CACHE TABLE` and every query doing real work — an aggregation, an `explode` over an array column, or a predicate on a nested struct field — with a 500 error, or in one case a hang past 2m40s with no result; GBIF species occurrences (`open_data/parquet_csv/sql/known_to_fail/08_gbif_create.sql`, AWS S3, directory-prefix Parquet `PATH` over a 1.6B+ row snapshot) fails *every* query including its plain, narrowly-filtered verification `SELECT`, despite `CACHE TABLE` (via the Data Explorer GUI) and `DESCRIBE` both succeeding. Foursquare and Overture both have deeply nested struct/array columns (names, categories, addresses, brand), which GBIF's flat Darwin Core schema does not — so nested-column handling can't be the whole story across all three. Whether the real common thread is the multi-file directory `PATH` pattern itself, sheer file-count/partition scale, or something specific to each source is unconfirmed — see each script's own `ISSUE-NN-<name>.md` for the full root-cause investigation and suggested debugging steps. Don't assume a successful `CREATE`, or even a successful `CACHE TABLE`, means a source is usable; always run the plain verification `SELECT` *and* at least one query that does real work before calling a source confirmed.
-- **HTTP 502 has (at least) two distinct, confirmed causes** — don't treat every 502 the same:
-  - **Rate limiting** (Singapore PM2.5): the connector likely issues more than one HTTP request per visible SQL statement (schema introspection, a Data Explorer preview fetch, a retry), tripping a source's real burst limit even though only one statement was run. Fix: wait ~30s and retry; don't add headers the API doesn't need.
-  - **Cold-start** (seen on `company_dns` while it ran on a scale-to-zero host, reproduced 5x; it has since moved and is no longer affected, but other serverless sources can behave the same way): a scale-to-zero backend 502s on the first request after idle, succeeds on immediate retry. If the cold instance is hit on a later `SELECT` rather than `CREATE TABLE` (remember: re-fetches every query), it surfaces instead as a client-side `java.sql.SQLException: ... TTransportException`, sometimes `"Multiple exceptions were thrown (3), ..."` — don't assume this wrapped exception means a structural/schema problem; check whether an immediate retry (after a warm-up ping) succeeds first.
+- **SchemaStore containers:** `CREATE SCHEMASTORE CONTAINER` has no `IF NOT EXISTS`; an earlier duplicate-name attempt failed. The 2.4.3.1 check deleted an empty test container through the documented API after confirming `viewCount=0`. It did not test a SQL container-drop command.
+- **REST request volume:** A REST table may call its source again for each query. On one `company_dns` table, `CACHE TABLE` reduced a count query from 49.7 seconds to about 1.2 seconds. This result is source-specific. `CACHE TABLE` uses a session cache; this repo has not confirmed a TTL or storage-tier option, and `SHOW CACHE TABLES` has not reliably reported active state. The Data Explorer cache action also behaved differently from SQL caching on two AWS Public Blockchain tables; see the [Parquet/CSV catalog](../../open_data/parquet_csv/parquet-csv-data-sources.md).
+- **Filestore updates:** On 2.4.3.1, `UPDATE LIGHTNING FILESTORE TABLE` failed without the original `path` in `OPTIONS` and succeeded with that path. See the [SQL command reference](zetaris-lightning-sql-commands.md).
+- **View replacement and cache:** On 2.4.3.1, `CREATE OR REPLACE SCHEMASTORE VIEW` invalidated a test cache. `OFFSITE UNCACHE TABLE` then returned `is not cached`; caching the view again made uncaching succeed. Do not assume view replacement preserves its cache.
+- **Table removal:** On 12 October 2026, `DROP LIGHTNING DATABASE TABLE` removed `reason` from a public S3 filestore registration and `ability` from a public PokéAPI REST registration on Zetaris 2.4.3.1. A `SELECT id, name` returned data from `ability` before the drop. `DROP LIGHTNING DATABASE` then removed the test database. These fixtures do not prove removal works for every connector or registration; use Data Explorer's **File Source & API** panel for an unconfirmed object.
+- **Source failures:** PUDL registration fails on its dotted bucket name ([issue record](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md)), while Ookla registration returned a 500 with no confirmed cause ([issue record](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-07-ookla.md)). Foursquare, Overture and GBIF registered but failed queries in their tested forms ([Foursquare](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-04-foursquare.md), [Overture](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-05-overture.md), [GBIF](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-08-gbif.md)). A successful `CREATE` alone does not confirm a usable table.
+- **Rate limits:** The `company_dns` operator reports deployment-dependent defaults of 200 requests/minute with a burst of 20, or 5/minute with a burst of 1. Space endpoint-calling statements by at least 15 seconds, cache the raw table, and wait 60 seconds after a 429 before retrying that statement. One statement can trigger several pooled retries. Scripts 12–14 include the cache steps; these limits are operator guidance, not measurements from the SQL command check.
+- **HTTP errors:** Singapore PM2.5 returned 502 under source rate limiting. `company_dns` previously returned a cold-start 502 and worked on retry; the incoming recipe record says its new host no longer scales to zero and the warm-up helper has been removed. Check the source and wait before retrying; do not treat all 502s as the same failure.
+- **JSON request bodies:** Repo scripts use an empty body with `http_encoding "URLENCODED"`. StatCan's JSON endpoint returned 415 with that form. A working JSON-body form has not been confirmed.
+- **Row counts:** Earlier repo runs recorded grid/footer count differences. Compare query results with the source before assuming Zetaris lost rows. Joins can also exclude records: the SIC/EDGAR inner join omitted IBM because its SIC code `3570` was missing from the reference. This is separate from the UI-count observation; see the [USL model checks](../../open_data/usl/usl-sources.md).
 
 ---
 
 ## 6. Verifying data — the non-negotiable discipline
 
-*Kbase: [SQL Editor overview](https://kbase.zetaris.com/knowledge/sql-editor-overview), [How to Save and Re-use SQL](https://kbase.zetaris.com/knowledge/how-to-save-and-re-use-sql), [Data Catalog Overview](https://kbase.zetaris.com/knowledge/data-catalog-overview).*
+For each REST or filestore table:
 
-For every REST or filestore table:
+1. Run `SELECT COUNT(*) FROM <container_or_db>.<table>`.
+2. Check the same source directly: `curl`/`jq` for REST or a bucket listing for files.
+3. Investigate any mismatch before relying on the result. A low count may come from the source, a path or query, or Zetaris.
 
-1. `SELECT COUNT(*) FROM <container_or_db>.<table>;`
-2. Independently hit the same source directly (`curl` + `jq` for REST; an S3 bucket listing for filestore) and compare.
-3. If Zetaris's count is lower, don't assume it's a source-data quirk — but don't assume it's a Zetaris bug either. Check both before trusting the table (section 5's row-count entry has a confirmed example of each direction).
-
-For filestore/date-partitioned sources specifically, re-run the bucket-listing command from the script's header comment shortly before you need the source — a `PATH` can silently stop matching anything when a new release replaces an old one.
+For versioned files, rerun the listing command in the SQL header before use. A valid `PATH` can stop matching when a source replaces a release.
 
 ---
 
-## 7. Virtual Data Marts (VDM) — the SQL-free consumption layer, and where USL changes this
+<a id="7-virtual-data-marts-vdm--the-sql-free-consumption-layer-and-where-usl-changes-this"></a>
+## 7. Virtual Data Marts (VDM): SQL commands and tested limits
 
-*Kbase: [Virtual Data Mart Overview](https://kbase.zetaris.com/knowledge/virtual-data-mart-overview), [Processes for Automation: Virtual Data Mart creation / deletion](https://kbase.zetaris.com/knowledge/processes-for-automation-virtual-data-mart-creation-/-deletion), [Virtual Pipeline Guide](https://kbase.zetaris.com/knowledge/virtual-pipeline-guide).*
+*Kbase: [Virtual Data Mart overview](https://kbase.zetaris.com/knowledge/virtual-data-mart-overview), [Virtual Pipeline guide](https://kbase.zetaris.com/knowledge/virtual-pipeline-guide).*
 
-A **Virtual Data Mart** sits above raw tables/views as a consumption-facing, drag-and-drop layer (`docs/plans/archive/edgar-sic-enrichment-plan.md` section 5.2). Confirmed by checking the SQL Guide's full statement list, the legacy SQL Manual, and the Virtual Pipeline Guide: **VDMs have no SQL surface at all** — create/update/delete is 100% GUI (drag tables onto a canvas, click Save). This is a real gap: unlike everything else in this document, a VDM cannot be scripted, version-controlled, or reproduced from a `.sql` file.
+The SQL command reference documents a native Virtual Data Mart lifecycle. On 12 October 2026, a fixture on Zetaris 2.4.3.1 passed the tested create, add, show, describe, update, rename and drop forms. This corrects the blanket claim that VDMs have no SQL controls. The run does not prove every canvas operation, option or permission has an equivalent SQL command. See [Virtual Data Marts in the SQL command reference](zetaris-lightning-sql-commands.md#17-virtual-data-marts).
 
-**Querying a table once it's inside a VDM** is undocumented in the Zetaris Kbase (checked the VDM Overview, the "Processes for Automation" page, and Query Director's page — none say). Confirmed live (2026-09-21): the reference is a **flat 2-part path, `<mart_name>.<table_name>`** — the mart drops the original `SCHEMASTORE CONTAINER` prefix entirely, using whichever "Virtual Table" alias the canvas shows for that node:
+The query path for a table added to a mart is a flat two-part name. This was confirmed on 21 September 2026; the mart exposes the virtual table alias without its original container prefix:
+
 ```sql
 SELECT * FROM companies_mart.all_companies_profile_table;   -- correct
 -- NOT companies_mart.edgar.all_companies_profile_table
 ```
-If a table was renamed on the way into the mart, query it by the renamed alias.
 
-**This is exactly the gap the Unified Semantic Layer (USL) closes** — see section 8. Where a VDM's model, relationships, and materialization state exist only as GUI clicks, a USL's equivalent concepts (table definitions, FK relationships, activation queries, DQ rules, and materialization) are all expressible as `CREATE TABLE` DDL and companion SQL statements, runnable from a script and re-creatable from source.
+The [USL](#8-the-unified-semantic-layer-usl-a-scriptable-alternativesuccessor-to-vdm) also defines tables and relationships in SQL. The supplied guide describes additional schema, data-quality and materialization features; see sections 8.3–8.6 for what this repo did and did not confirm.
 
 ---
 
 ## 8. The Unified Semantic Layer (USL): a scriptable alternative/successor to VDM
 
-*Source: the "Unified Semantic Layer (USL) — User Guide" (supplied separately, not yet checked into this repo). Kbase: no dedicated page found — see section 0's companion-map table for exactly what was checked. Sections 8.1-8.4 below are general USL-guide claims, still per the guide rather than confirmed live. The worked example testing those claims against the EDGAR+SIC data already onboarded via REST (`open_data/rest_apis/sql/rate_limited/12_company_dns_create.sql`, `open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_create.sql`) is [`open_data/usl/`](../../open_data/usl/) — its lifecycle (namespace, compile, activate) is confirmed working; see [`open_data/usl/usl-sources.md`](../../open_data/usl/usl-sources.md) for per-model status, section 8.6 below for what's confirmed about `REGISTER DQ` specifically, and [`docs/plans/archive/usl-build-plan.md`](../plans/archive/usl-build-plan.md) for the live-verification checklist.*
+The examples below use the supplied USL User Guide and the [`open_data/usl/`](../../open_data/usl/) package. See [USL source status](../../open_data/usl/usl-sources.md) and the [archived build record](../plans/archive/usl-build-plan.md). Claims based only on the guide are identified below.
 
 ### 8.1 Why this matters for this repo specifically
 
-Every REST/Parquet source in this repo ends the same way: raw table → `SCHEMASTORE VIEW` → (optionally) dragged into a GUI-only VDM with no SQL trail. USL's lifecycle covers the same ground but keeps the whole thing — including the final consumption layer — in DDL:
+A SchemaStore view and a USL table can use the same flattening `SELECT`. USL adds a declared table schema and a lifecycle around that query. This example shows the shape; see the package scripts for complete SQL:
 
 ```text
 Design (DDL)  →  Compile & Deploy  →  Activate (blue)  →  Query
@@ -202,8 +178,6 @@ Design (DDL)  →  Compile & Deploy  →  Activate (blue)  →  Query
                                             ├─→  Data Quality rules → valid / invalid records → export
                                             └─→  Materialize (purple) → fast queries on large tables
 ```
-
-Concretely, a USL table's `ACTIVATE ... AS SELECT` clause can be exactly the `CREATE SCHEMASTORE VIEW ... AS SELECT` query this repo already writes for every REST source — pointed at a raw Lightning REST/Filestore table instead of a bare data source:
 
 ```sql
 -- What this repo does today (SchemaStore):
@@ -230,78 +204,73 @@ FROM company_dns.sic_codes_raw
 LATERAL VIEW explode(from_json(to_json(data.sics), 'map<string, struct<...>>')) AS sic_code, sic_val;
 ```
 
-The `LATERAL VIEW explode()` + dynamic-key coercion technique from section 3 is unaffected — a USL activation query is still an ordinary `SELECT`, so every JSON-shape lesson in section 2-section 4 applies unchanged. **USL doesn't replace the flattening work; it replaces the destination the flattened result lands in** — a schema-validated, describable, relatable, DQ-checkable, materializable table instead of a bare view.
+The JSON conversion and `LATERAL VIEW explode()` still do the flattening. USL changes the destination and adds the declared schema; it does not remove that work.
 
 ### 8.2 What USL adds beyond a SchemaStore view
 
-| Capability | SchemaStore view (today) | USL table |
+The supplied USL guide describes these capabilities. The table is a guide summary, not confirmation of every option.
+
+| Capability | SchemaStore view | USL table |
 |---|---|---|
-| Column-level types/constraints | Not modeled — a view just has inferred output columns | `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY ... REFERENCES` (with `ON DELETE`/`ON UPDATE`), `NOT NULL`, `CHECK` — all in the `CREATE TABLE` DDL |
-| Schema validation on activation | None — a view's `SELECT` just runs | `ACTIVATE` checks the query's result schema against the table definition and reports a mismatch inline |
-| Relationships between tables | Implicit (a manual `JOIN` in a downstream query, e.g. `edgar.*_profile_table` joining `company_dns.sic_codes_table`) | Explicit FK, drawn on the ERD canvas, generates a DQ rule automatically |
-| Data quality | None built in — this repo's own "self-consistency check" queries (e.g. `sql/12`'s query 17, `sql/11`'s query 8) are hand-written ad hoc `SELECT`s | First-class: PK/unique/FK constraints auto-generate DQ rules; custom rules are arbitrary boolean SQL, run via `RUN DQ`, with valid/invalid record sets you can inspect and export |
-| Consumption layer with no SQL trail (VDM's problem, section 7) | N/A — a view already has a SQL definition | The USL table **is** the consumption layer, and it's still `CREATE TABLE` DDL — no separate GUI-only object needed |
-| Fast queries over a live REST/file source | Would need to build a separate materialization pipeline by hand | `MATERIALIZE USL TABLE ... TO STORAGE (format='parquet'|'delta'|'iceberg', path=...)`, with a LIVE/MATERIALIZED toggle per table (and a global toggle) |
-| Documentation | A comment in the `.sql` file | Markdown descriptions at USL/table/column level, stored on the model itself (`UPDATE USL ... SET DESCRIPTION`) |
-| Access control | Whatever the underlying data source or container grants | Namespace, USL-instance, and column-level (GRANT/DENY/HIDE/MASKED/ENCRYPTED) — admin-only |
+| Types and constraints | Inferred output columns | Declared types, keys and checks |
+| Relationships | Written as joins | Foreign keys shown in the ERD |
+| Data quality | Separate queries | Constraint-generated and custom rules |
+| Materialization | Separate pipeline | Export to configured storage |
+| Descriptions and access | SQL comments and source permissions | Model/table/column descriptions and access controls |
 
 ### 8.3 Practical implications for this repo's REST sources
 
-- **`CACHE TABLE` (section 5) and USL `MATERIALIZE` solve overlapping but different problems — and they're not even both Zetaris-native.** `CACHE TABLE` is Spark's own session-scoped in-memory cache (section 5's correction), an in-session performance workaround for the "every query re-fetches" REST behavior — no format choice, no TTL, undocumented expiry, not tracked by Zetaris's own `SHOW CACHE TABLES`. `MATERIALIZE USL TABLE` is a first-class, persistent export to Parquet/Delta/Iceberg in configured cloud storage, with a `Records: All | Valid Records Only` option gated on having at least one DQ rule — closer in spirit to the plain-SQL `INSERT INTO FUSIONDB...` materialization also covered in section 5, but scoped to a USL table specifically. For a rate-limited or cold-start-prone REST source (Singapore PM2.5, `company_dns`), materializing the activated table (or, outside USL, the plain `FUSIONDB` `INSERT INTO`) is very plausibly a more durable fix than `CACHE TABLE` — this is worth live-testing directly, since `CACHE TABLE`'s known gaps (section 5) are exactly the kind of thing a persistent materialized snapshot sidesteps.
-- **The `MISSING_ATTRIBUTES` self-join failure (section 4)** is about referencing the same `UNION ALL`/`explode()`-based view twice in one query. A USL activation query has the same shape risk if it's built the same way — the window-function rewrite in section 4 should carry over unchanged, since the underlying query engine (Spark SQL) hasn't changed, just the destination the query's result lands in.
-- **This repo's `all_companies_profile_table` pattern (`sql/11`, a 7-way `UNION ALL` across per-company REST tables)** maps naturally onto USL's FK-based model instead of a flat union: a `company` table with one row per company, activated from each company's own `SELECT`, related to a `sic_code` table via `FOREIGN KEY (sic) REFERENCES sic_code(sic_code)`. That relationship then auto-generates a DQ rule for free — replacing `sql/11`'s hand-written query 8 (checking that `sic_description_edgar` and `sic_description_reference` agree) with something closer to the platform's own constraint mechanism, though note a custom DQ rule (not a bare FK) is still what's needed for that specific "do two description strings agree" check, since FK just checks referential existence, not value equality across columns.
-- **The `cik` format mismatch called out in `sql/11` caveat 1** (bare integer in the revenue tables vs. zero-padded string in the submissions data) is exactly the kind of thing a USL `FOREIGN KEY` relationship should be defined *after* resolving, not before — the ERD canvas will happily draw a relationship line on a column pair that never actually matches at query time, the same silent-mismatch risk noted for VDM relationships in `sql/11`'s own trailing comment.
-- **VDM's dead end (section 7 — no SQL surface, no version control) doesn't need to be solved by working around it any more.** Where the `edgar-sic-enrichment-plan.md` had to accept "the VDM step is unavoidably manual GUI work, not something `sql/01_edgar_company_facts_create.sql`-style automation can drive," the USL lifecycle is scripted DDL end to end, per the Appendix B command reference — `COMPILE USL`, `ACTIVATE USL TABLE`, `REGISTER DQ`, `MATERIALIZE USL TABLE`, `UPDATE USL ... SET DESCRIPTION` are all real SQL statements, not GUI-only click sequences. **For any future "advanced data product" like the EDGAR+SIC join, USL is very likely the tool to reach for first, not VDM** — but this needs to be confirmed with an actual live run before treating it as settled, the same discipline this whole document otherwise applies everywhere else.
+- `CACHE TABLE` is a session cache. `MATERIALIZE USL TABLE` is described as a persistent export. The repo has not live-tested materialization or its interaction with a cache.
+- A foreign key checks that a referenced value exists. In the EDGAR/SIC fixture, the `sic` rule found IBM's code `3570` missing from the reference list; it does not check whether two description strings match. See [USL source status](../../open_data/usl/usl-sources.md) and the [archived build record](../plans/archive/usl-build-plan.md).
+- The current USL example uses zero-padded string `cik` values from submissions. It does not join to revenue tables where `cik` is numeric; normalize that difference before adding such a join.
+- Activation queries are ordinary `SELECT` statements. The self-join workaround in section 4 may apply, but the USL-specific case has not been tested.
 
-### 8.4 USL quirks worth flagging (per the guide, not yet live-tested)
+<a id="84-usl-quirks-worth-flagging-per-the-guide-not-yet-live-tested"></a>
+### 8.4 USL quirks and validation limits
 
-- **`CREATE NAMESPACE`/`COMPILE USL` both use `IF NOT EXISTS`**, unlike `CREATE SCHEMASTORE CONTAINER` (section 5), which conspicuously does not. Worth confirming this actually behaves idempotently live — this repo has been burned before by a doc claiming an option that didn't hold up live (the `CREATE LIGHTNING DATABASE` prerequisite, section 1).
-- **Canvas card positions and FK edits made directly on the ERD canvas are session-only** — per the guide's own note, "relationships that must persist should be defined in the DDL." Treat the canvas as a viewer/scratchpad for relationships, not the source of truth; the DDL is.
-- **`Valid Records Only` materialization requires at least one DQ rule already on the table** — if a table has none, the option is unavailable with a warning. Don't assume materialization alone gives you a clean/valid dataset; a DQ rule has to exist first.
-- **The example DQ rule syntax includes a self-referencing subquery form** (`cid IN (SELECT id FROM lightning.metastore.crm.ordermart.customer)`), using only bare, unqualified column names — no table alias anywhere in the guide's own examples. See section 8.6 for what this repo confirmed live about how far that pattern actually extends.
-- **`REMOVE USL`/`DROP NAMESPACE ... CASCADE` exist as real SQL**, unlike VDM's complete absence of a teardown path and unlike this repo's own REST/filestore sources (section 5, where only `DROP VIEW` is reliable and the underlying Lightning database registration needs the GUI). If confirmed live, USL teardown may be strictly better than what this repo has had to document as a workaround everywhere else.
+Some items below come from the supplied guide; others were checked live on 12 October 2026, Zetaris 2.4.3.1.
+
+- **Model replacement clears activation.** `UPDATE USL ... AS <JSON>` accepted a model containing `activateQuery`, but its next `SELECT` failed with `table(...) is not activated`. Running `ACTIVATE USL TABLE` restored access. The update result alone does not confirm the table remains queryable. See [UPDATE USL](zetaris-lightning-sql-commands.md).
+- **Namespace and compile:** `lightning.metastore` must exist before `CREATE NAMESPACE IF NOT EXISTS lightning.metastore.<name>`. A multi-table `COMPILE USL` worked when sent as one statement over JDBC. These checks were confirmed on 1 October 2026; the SQL Workspace editor and a semicolon-splitting runner did not handle that multi-table form.
+- **`IF NOT EXISTS` idempotency:** the supplied guide shows this option for `CREATE NAMESPACE` and `COMPILE USL`. The 2.4.3.1 check did not confirm repeat-run behaviour.
+- **Canvas edits:** the supplied guide says card positions and FK edits made on the ERD canvas are session-only; define persistent relationships in DDL.
+- **Valid-record materialization:** the guide says `Valid Records Only` requires a DQ rule. The repo has not confirmed that option live.
+- **USL removal:** `REMOVE USL` removed the deployed test model on 2.4.3.1; `DROP NAMESPACE` then removed its empty namespace. Non-empty namespace removal and `DROP NAMESPACE ... CASCADE` were not tested.
 
 ### 8.5 Known open items in this repo's USL package specifically
 
-*Unlike 8.1-8.4 above (general USL-guide quirks), these are caveats specific to [`open_data/usl/sql/01_sic_usl_create.sql`](../../open_data/usl/sql/01_sic_usl_create.sql) and [`sql/02_sic_edgar_usl_create.sql`](../../open_data/usl/sql/02_sic_edgar_usl_create.sql) — flagged in advance, unconfirmed either way.*
+The [archived USL build record](../plans/archive/usl-build-plan.md) tracks the full checklist. Remaining limits include:
 
-- **Cross-USL foreign keys are untested.** Both scripts define their own copy of the `sic_code` table rather than having `sic_edgar_usl.company` reference `sic_usl.sic_code` across USL boundaries — the USL User Guide's own `FOREIGN KEY ... REFERENCES` example only shows a same-DDL-block reference (`department(id)` within the same `CREATE TABLE` batch), and neither the guide nor the Kbase confirms whether a FK can target a table in a *different* USL. Duplicating `sic_code` avoids relying on an unconfirmed capability; if cross-USL FKs turn out to work, this duplication can be removed later.
-- **`MATERIALIZE USL TABLE`'s SQL form doesn't document a `Records: Valid Records Only` equivalent.** The USL User Guide's UI section describes that option explicitly, but its own SQL command reference (Appendix B) shows only `format`/`path` options. `sql/02`'s materialization step is written both ways (a SQL-only attempt and a fallback note pointing at the GUI's Configure Materialization dialog) — this needs a live run to know which one actually works, and if only the GUI path works, that's a second VDM-shaped gap in USL's own SQL surface.
-- **The `cik` format mismatch from `open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_create.sql` is sidestepped, not fixed, the same way that script itself sidestepped it.** `company.cik` in this package is declared to match the zero-padded string shape from the `submissions` endpoint (the only shape this package uses) — it never joins against `open_data/rest_apis/sql/rate_limited/01_edgar_company_facts_create.sql`'s revenue tables, where `cik` is a bare integer, so that mismatch doesn't come up here. A future extension joining USL's `company` table to revenue data would need to resolve that format difference first.
-
-- **Namespace prerequisite and multi-table compile (confirmed live, 2026-10-01).** `CREATE NAMESPACE IF NOT EXISTS lightning.metastore.<name>` requires `lightning.metastore` to exist; on an instance where it did not, it failed with `parent namespace : metastore is not existing`, over REST. After a clean reset it worked over both JDBC and REST. A two-table `COMPILE USL` succeeds when sent as one whole statement over JDBC (the CREATE TABLE statements separated by `;` inside it); a runner that splits on `;` breaks it, as does the SQL Workspace editor per the command reference.
+- Cross-USL foreign keys have not been tested.
+- The SQL form of `MATERIALIZE USL TABLE` has not been confirmed to support `Records: Valid Records Only`.
+- The current USL model avoids the numeric-versus-string `cik` join rather than resolving it.
+- Whether materialization changes cache behaviour and whether preview counts share the SQL Workspace row-display issue remain open.
 
 ### 8.6 REGISTER DQ: confirmed limitations (live-tested)
 
-Confirmed directly against a live instance while building both USL package scripts (`open_data/usl/sql/01_sic_usl_create.sql`, `02_sic_edgar_usl_create.sql`):
+These findings come from the live-tested [`open_data/usl/`](../../open_data/usl/) examples. The supplied USL guide is the only SQL syntax source found for these commands.
 
-- **No alias on the `TABLE` clause.** `REGISTER DQ <rule> TABLE <table> <alias> AS <expr>` is not valid grammar — `REGISTER DQ <rule> TABLE <table> AS <expr>` is the only accepted form (`extraneous input '<alias>' expecting 'AS'`). There is no way to give "the current row" a name distinct from the table's own bare name.
-- **No window functions in the rule expression.** `REGISTER DQ` evaluates its boolean expression internally as a `WHERE`-clause filter, and Spark disallows window functions inside a `WHERE` clause outright (`It is not allowed to use window functions inside WHERE clause`) — a general Spark SQL restriction, not a `REGISTER DQ`-specific one, but it applies here regardless of how the expression is framed.
-- **Practical consequence: a same-table self-consistency check (does row X agree with row Y of the same table) is not expressible as a `REGISTER DQ` rule if the table's own name collides with one of its own columns.** `sic_usl.sic_code` (the table) has a `sic_code` (the column) — the bare table name resolves to the column, not the table, and with no alias support (above) and no window-function escape hatch (above), there's no way to express `sic_usl`'s `major_group_desc_consistent` check as a `REGISTER DQ` rule. Confirmed by three failed live attempts (a table-qualified correlated subquery, the same subquery with an explicit alias, and a window function in place of the subquery). It runs instead as a plain aggregate query in `open_data/usl/sql/01_sic_usl_select.sql`.
-- **A cross-table correlation may behave differently, but this repo has not confirmed it either way.** The USL User Guide's own `REGISTER DQ` examples (Appendix B: `id > 0`, `cid IN (SELECT id FROM ...)`) use only bare, unqualified column names. `sic_edgar_usl`'s description-agreement check (`company.sic` against `sic_code.description`, two different tables, no colliding column names) failed twice with a table-qualified reference, but a third, fully-unqualified attempt was not run live before this investigation was closed out. It runs as a plain join query in `open_data/usl/sql/02_sic_edgar_usl_select.sql` instead of depending on the answer.
-- **`REGISTER DQ`'s SQL surface is documented only in the supplied USL User Guide (Appendix B).** Checked directly: neither the [Zetaris SQL Manual](https://kbase.zetaris.com/knowledge/sql-manual) nor the [SQL Guide](https://kbase.zetaris.com/knowledge/sql-guide) mention `REGISTER DQ`/`RUN DQ`/`SHOW DQ`/`LIST DQ` anywhere. A separate Kbase article, [Data Quality & Exception Management - Technical implementation](https://kbase.zetaris.com/knowledge/data-quality-exception-management-technical-implementation), describes an unrelated, CSV-file-driven DQ mechanism (rules as rows in an uploaded `Business_Rules.csv`, under `/file-store/DQ_EXTERNAL_FILES`, consumed through a Tableau dashboard) — a different subsystem from USL's own SQL-based DQ rules, with no further hints on the limitations above.
-- **A PK/FK constraint's auto-generated rule is named plainly after the column it constrains**, not a generated `pk_<table>`/`fk_<table>_<column>`-style name. Confirmed live on `sic_edgar_usl.company`: the `PRIMARY KEY` on `cik` registered as a rule literally named `cik`, and the `FOREIGN KEY` on `sic` registered as a rule literally named `sic` — check `LIST DQ USL <namespace>.<usl>`'s own output before assuming a name rather than guessing one for `SHOW DQ VALID/INVALID RECORD`.
-- **`SHOW DQ ALL INVALID TABLE <table>` (and, very likely, `SHOW DQ VALID/INVALID RECORD`) return a single `records` column, not flat columns.** Confirmed live: each invalid row comes back as one JSON object serialized into that column, e.g. `{"cik":"0000051143","entity_name":"INTERNATIONAL BUSINESS MACHINES CORP","sic":"3570","sic_description_edgar":"Computer & office Equipment"}` — not spread across separate columns the way an ordinary `SELECT` result is. Parse the JSON client-side, or with Spark's `get_json_object`/`from_json` in a follow-up query, to get the individual fields back out as columns.
+- **No row alias:** use `REGISTER DQ <rule> TABLE <table> AS <expr>`. Adding an alias before `AS` failed.
+- **No window functions:** rule expressions run as a filter, where Spark rejects window functions.
+- **Same-table checks can be blocked by name collisions:** in `sic_usl.sic_code`, the table and column share a name. Three tested correlated-subquery/alias/window forms failed, so the consistency check remains a plain query in [`01_sic_usl_select.sql`](../../open_data/usl/sql/01_sic_usl_select.sql).
+- **Cross-table correlation is unconfirmed:** the tested EDGAR/SIC check remains a plain join query in [`02_sic_edgar_usl_select.sql`](../../open_data/usl/sql/02_sic_edgar_usl_select.sql).
+- **Constraint rule names use the column name:** check `LIST DQ USL` output rather than guessing a generated name.
+- **DQ output shape:** `SHOW DQ ALL INVALID TABLE` returns rows in a JSON `records` column. In the 2.4.3.1 test, individual `SHOW DQ VALID/INVALID RECORD` queries returned ordinary columns. Check the output for your rule and table rather than assuming one shape for every form.
 
 ---
 
 ## 9. Open questions to close before validating this guide
 
-These need an actual Zetaris instance, not more reading, to resolve — consistent with how every other "confirmed" claim in this repo was closed out. **This list is now tracked as an executable checklist in [`docs/plans/archive/usl-build-plan.md`](../plans/archive/usl-build-plan.md)** rather than duplicated here; treat the items below as the "why," and that plan as the "how/status."
-
-1. **Activate a USL table from one of this repo's existing REST raw tables** (candidate: `company_dns.sic_codes_raw`, its flattening query already confirmed working as a SchemaStore view — see [`open_data/usl/sql/01_sic_usl_create.sql`](../../open_data/usl/sql/01_sic_usl_create.sql)) — confirmed: `ACTIVATE ... AS SELECT` runs successfully against this exact `LATERAL VIEW explode()` + `from_json`/`to_json` coercion query. Whether `ACTIVATE` reports a schema mismatch inline on a deliberately broken variant is still unconfirmed (plan step V2).
-2. **Test whether `CACHE TABLE` and USL `MATERIALIZE` compose or conflict** — does materializing an activated table that wraps an already-cached raw REST table behave any differently than materializing one that doesn't?
-3. **Confirm `COMPILE USL IF NOT EXISTS` is actually idempotent live**, the way `CREATE SCHEMASTORE CONTAINER`'s missing `IF NOT EXISTS` was NOT assumed and had to be caught by testing.
-4. **Rebuild the EDGAR+SIC "company profile" data product as a USL model** — done in [`open_data/usl/sql/02_sic_edgar_usl_create.sql`](../../open_data/usl/sql/02_sic_edgar_usl_create.sql), kept **alongside**, not instead of, the existing flat `UNION ALL` + manual VDM version (`open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_create.sql`) so the two can be run side by side and contrasted. The activation lifecycle is confirmed working; whether the FK-based rule genuinely replaces the hand-written self-consistency queries (`open_data/rest_apis/sql/rate_limited/12_company_dns_select.sql` query 17, `open_data/rest_apis/sql/rate_limited/11_edgar_company_profiles_select.sql` query 8) still needs a live comparison — the description-agreement check runs as a plain query rather than a `REGISTER DQ` rule (section 8.6), so the comparison itself is still open. See section 8.3's own note on why a bare FK likely isn't sufficient for that specific check.
-5. **Confirm the row-count under-reporting bug (section 5) does or doesn't also affect USL table previews/`Preview` panel results** — it was observed in the plain SQL Workspace grid; unclear whether USL's own preview path shares the same rendering code.
+Use the [archived USL build record](../plans/archive/usl-build-plan.md) for the live-verification checklist. The outstanding items are materialization behaviour, valid-only SQL options, `COMPILE USL` repeat behaviour, cross-USL foreign keys and preview row counts. Treat the guide-only claims above as unverified until a test or product document confirms them.
 
 ---
 
 ## 10. Related documents in this repo
 
-| Document | Relationship to this guide |
+| Document | Use it for |
 |---|---|
-| [`docs/plans/archive/edgar-sic-enrichment-plan.md`](../plans/archive/edgar-sic-enrichment-plan.md) | The plan that produced `sql/10`/`sql/11` (since replaced by `sql/12`/`sql/11`; the REST+SchemaStore+manual-VDM version of the EDGAR+SIC data product). section 9 item 4 above extends this plan's scope; see that plan's own updated status line for the USL follow-on. |
-| [`docs/plans/archive/usl-build-plan.md`](../plans/archive/usl-build-plan.md) | The plan for building and live-verifying the USL package below — tracks section 9's checklist as actionable, checkable steps. |
-| [`open_data/usl/`](../../open_data/usl/) | The actual USL rebuild: `sic_usl`, a single-table USL, and `sic_edgar_usl`, a two-table FK/DQ/materialization USL model of the same EDGAR+SIC data product `sql/12`/`sql/11` already built with REST+SchemaStore+VDM. Kept side by side with those scripts specifically to contrast the two approaches, per explicit request — not a replacement. |
-| [`open_data/rest_apis/HOWTO.md`](../../open_data/rest_apis/HOWTO.md), [`open_data/parquet_csv/HOWTO.md`](../../open_data/parquet_csv/HOWTO.md) | The per-package onboarding walkthroughs this guide's section 1-section 6 summarize and cross-link back to; read those for the full, source-by-source detail this guide compresses. |
+| [EDGAR/SIC archived record](../plans/archive/edgar-sic-enrichment-plan.md) | REST/SchemaStore/VDM example and its source-data caveats |
+| [USL archived build record](../plans/archive/usl-build-plan.md) | USL verification checklist and outcomes |
+| [`open_data/usl/`](../../open_data/usl/) | USL SQL and per-model status |
+| [REST API HOWTO](../../open_data/rest_apis/HOWTO.md), [Parquet/CSV HOWTO](../../open_data/parquet_csv/HOWTO.md) | Source setup and verification steps |
+| [SQL command reference](zetaris-lightning-sql-commands.md) | Command syntax and examples |
