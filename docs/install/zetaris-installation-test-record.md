@@ -11,7 +11,6 @@ This file records the tests run against the [installation and configuration guid
 | §6 Parquet/CSV recipe (PUDL energy sources) | ⚠️ Passed at the time, no AWS credentials needed — contradicted by a later run; PUDL is now known to fail (see §6's own update) | 24 Sep 2026 |
 | §6 REST recipe (PokéAPI Pikachu abilities) | ✅ Passed | 24 Sep 2026 |
 | §7 Stop, start, down and up, with data retained | ✅ Passed | 24 Sep 2026 |
-| §4.1–4.3 Path B: AWS cost, sizing and instance choice | ✅ Checked on paper (see [AWS path](#aws-path)); not run on AWS | 24 Sep 2026 |
 
 ## Test environment
 
@@ -94,22 +93,4 @@ Memory use by the Zetaris containers, from `docker stats`, with the local sizing
 | Idle after first start | 1.03 GiB | 0.50 GiB | 0.13 GiB | 0.10 GiB | 0.13 GiB | **≈ 1.9 GiB** |
 | After the §5–§6 queries | 1.30 GiB | 0.63 GiB | 0.15 GiB | 0.11 GiB | 0.13 GiB | **≈ 2.3 GiB** |
 
-These figures fit the preflight check's assumptions (6 GB minimum, 8 GB recommended). The test ran with 7.7 GiB given to Docker, about the same as the 8 GiB `m7i-flex.large` in §4.
-
-## AWS path
-
-The [original installation plan](../plans/archive/zetaris-installation-guide.md) (archived — superseded by the guide itself) asked for the AWS path to be written up with its services, cost and teardown, and for two questions to be answered: whether a free-tier micro instance can run Zetaris, and whether a session fits the credit budget. Both were checked on paper; nothing was launched on AWS.
-
-| Check | Result |
-| --- | --- |
-| Can a free-tier micro instance run Zetaris? | **No.** `preflight.sh` fails below 6 GB of memory for Docker, and the Zetaris containers alone used 1.9–2.3 GiB in the local test (see [Memory used](#memory-used)). A t2/t3.micro has 1 GiB. |
-| Can the AWS Free plan run Zetaris? | **Yes, on paper.** For accounts created on or after 15 July 2025, the Free plan's eligible types include `m7i-flex.large` (2 vCPUs, 8 GiB) ([AWS free-tier instance types](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html)). 8 GiB passes preflight's 6 GB minimum, with warnings for memory under 8 GB and fewer than 4 CPUs. It gives about the same memory as the local test (7.7 GiB), and its 2 vCPUs match the local profile's `local[2]`. Older accounts only get t2/t3.micro free and need a paid `t3.xlarge`. |
-| Instance size in §4.2 | Default `m7i-flex.large`. Alternative `t3.xlarge` (4 vCPUs, 16 GiB), which meets the preflight recommendation of 4 CPUs and 8 GB. |
-| Cost in §4.1, Sydney (`ap-southeast-2`) rates from the AWS price list published 21 Sep 2026 | `m7i-flex.large`: $0.1197 × 8 h = $0.9576 + IPv4 $0.005 × 8 h = $0.04 + gp3 40 GB × $0.096 × 8/730 ≈ $0.042 ≈ **$1.04 per eight-hour session**. Keeping the disk for a month: $0.9976 + $3.84 ≈ **$4.84**. Running everything for 730 hours: $87.38 + $3.65 + $3.84 = **$94.87**. `t3.xlarge` at $0.2112/h: **$1.77** per session, **$5.57** with the disk kept for a month, **$161.67** for 730 hours. |
-| Fit against the ~$200 credit budget | An `m7i-flex.large` session uses about 0.5% of $200 (a `t3.xlarge` session about 0.9%). The guide asks readers to reserve $10 and set a $10 budget alert. |
-| Services used | EC2, EBS, a security group and the default VPC. No NAT gateway, load balancer, RDS or Kubernetes. |
-| Teardown | §7 covers terminating the instance and removing leftover volumes, snapshots, Elastic IPs and the security group. |
-
-## Pending
-
-- **Running Path B on AWS (§4.1–4.3).** The SSH tunnel and teardown have not been tried on a real AWS account, and neither has running Zetaris on an `m7i-flex.large`'s 2 vCPUs.
+These figures fit the preflight check's assumptions (6 GB minimum, 8 GB recommended). The test ran with 7.7 GiB given to Docker.

@@ -2,7 +2,7 @@
 
 Create a Zetaris compute cluster in your AWS account, sign in to its Gateway and run a query.
 
-For Docker Compose on your own computer, see [Install locally](updated_zetaris_installation_guide.md). For Docker Compose on a VM you manage, see [Self-managed EC2 and Docker Compose](self-managed-ec2-installation-guide.md).
+For Docker Compose on your own computer, see [Install locally](updated_zetaris_installation_guide.md).
 
 ## Before you start
 
@@ -96,4 +96,4 @@ To review your retained storage, record the **EFS ID** from the cluster **Overvi
 - **Lifecycle summary still says "started".** The summary can retain this wording after completion. Check the individual stages and final cluster status: all seven provisioning stages must succeed with **Active**, or all three termination stages must succeed with **Deleted**.
 - **S3 Bucket is blank in Overview.** Use **CloudFormation > Resources > WorkspaceS3Bucket** to find the bucket. A `DELETE_SKIPPED` status means CloudFormation retained it. The cluster's EFS file system is separate from the Quickstart stack and must be reviewed separately.
 
-The managed AWS cost information is separate from the dated EC2 estimate in the [self-managed VM guide](self-managed-ec2-installation-guide.md). Use the current AWS account notice and your AWS billing information for this workflow.
+Use the current AWS account notice and your AWS billing information for this workflow.

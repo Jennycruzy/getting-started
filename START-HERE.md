@@ -11,7 +11,6 @@ You need the Zetaris website URL, your account and query permission.
 | Supplied instance | Sign in using the details you've been given. |
 | Your computer | Download from [Zetaris Cloud's Run locally page](https://cloud.enterprise.zetaris.com/dashboard/download), then follow [Install locally](docs/install/updated_zetaris_installation_guide.md). |
 | Managed AWS cluster | Use [Managed AWS cluster](docs/install/managed-aws-cluster-guide.md) to connect your AWS account and create a Zetaris compute cluster from Zetaris Cloud. |
-| Self-managed EC2 virtual machine | Follow [Self-managed EC2 and Docker Compose](docs/install/self-managed-ec2-installation-guide.md) to install the supplied bundle on a VM you manage. |
 
 ## 2. Run some SQL
 

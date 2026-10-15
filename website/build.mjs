@@ -44,7 +44,6 @@ const groups = [
   ['Installation', [
     ['docs/install/updated_zetaris_installation_guide.md', 'Install locally'],
     ['docs/install/managed-aws-cluster-guide.md', 'Managed AWS cluster'],
-    ['docs/install/self-managed-ec2-installation-guide.md', 'Self-managed EC2 and Docker Compose'],
   ]],
 ];
 const pages = groups.flatMap(([, entries]) => entries);

@@ -7,7 +7,7 @@
 
 ## Why this is deferred
 
-Explicit call: don't push hard on Kafka (or any streaming source) until it's confirmed that a Zetaris hobby-edition setup — either the AWS free-tier mini install or the local docker-compose install (see `docs/install/updated_zetaris_installation_guide.md`, now installed and tested locally — AWS path still only checked on paper) — can actually run and ingest from a Kafka broker at all. Standing up a broker (even a lightweight one) is a materially heavier footprint than a filestore table or a REST call, and both hobby-edition candidates have unknown resource ceilings (AWS free-tier's ~$200/time-boxed credit limit; docker-compose's dependence on the host machine). Scaffolding a Kafka folder before that's known risks work that has to be redone or dropped.
+Do not start Kafka or other streaming recipes until a Zetaris installation can ingest from a Kafka broker. The [local installation](../../install/updated_zetaris_installation_guide.md) has been tested, but Kafka ingestion has not. A broker needs more resources than a file table or REST call, and the host must have enough capacity for both Zetaris and Kafka. Confirm ingestion before scaffolding the recipe.
 
 ## Sources (for when this is picked up)
 

@@ -14,7 +14,7 @@ The original source research (14 sections of researched-but-mostly-unscripted so
 
 | | |
 |---|---|
-| [Zetaris installation & configuration guide](../install/updated_zetaris_installation_guide.md) | ✅ Done — local docker-compose install fully tested; AWS free-tier path checked on paper, not yet run on AWS. See the [test record](../install/zetaris-installation-test-record.md). |
+| [Zetaris installation & configuration guide](../install/updated_zetaris_installation_guide.md) | ✅ Done — local docker-compose install fully tested. See the [test record](../install/zetaris-installation-test-record.md). |
 
 ## Recipes, in priority order
 
@@ -31,7 +31,7 @@ The original source research (14 sections of researched-but-mostly-unscripted so
 | 8 | UK open data | 📋 Planned | [recipes/08-uk-open-data.md](recipes/08-uk-open-data.md) | Companies House is a strong SQL-recipe-adjacent relational dataset; TfL is a future Kafka-replay candidate. |
 | 9 | Canada / Australia / Mexico / Africa | 📋 Planned | [recipes/09-regional-open-data.md](recipes/09-regional-open-data.md) | Four smaller, mostly no-key categories bundled into one unit of work; each still gets its own top-level repo folder. |
 | 10 | PDFs | 📋 Planned | [recipes/10-pdf-sources.md](recipes/10-pdf-sources.md) | Lower priority — valuable for a RAG/ingestion demo, but not central to "get data queryable in Zetaris." |
-| 11 | Kafka streaming | ⏸ Deferred | [recipes/11-kafka-streaming.md](recipes/11-kafka-streaming.md) | Held back until it's confirmed a hobby-edition Zetaris instance (AWS free-tier or docker-compose) can actually ingest from a broker — heavier footprint, higher risk of wasted scaffolding if built before that's known. |
+| 11 | Kafka streaming | ⏸ Deferred | [recipes/11-kafka-streaming.md](recipes/11-kafka-streaming.md) | Held back until it's confirmed a hobby-edition Zetaris instance can actually ingest from a broker — heavier footprint, higher risk of wasted scaffolding if built before that's known. |
 
 ## Not a recipe on its own
 

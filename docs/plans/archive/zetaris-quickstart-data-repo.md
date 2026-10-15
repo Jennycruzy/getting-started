@@ -21,7 +21,7 @@ Note on current layout: the handoff suggested a `parquet/` folder; the package w
 
 ## Phase 1 — Zetaris installation & configuration guide
 
-Deferred from "build the repo tree" status to its own prerequisite: every recipe needs a running Zetaris instance to verify against, and the shape of a hobby/mini edition isn't known yet. Full detail in **[zetaris-installation-guide.md](zetaris-installation-guide.md)** (archived — see its own banner) — covers both a candidate AWS free-tier mini install (fits inside free-tier limits + ~$200 promotional credit, time-boxed) and a local `docker compose` install. This needs to reach at least a working local install before the Parquet/CSV recipe's live-verification work items can close.
+Deferred from "build the repo tree" status to its own prerequisite: every recipe needs a running Zetaris instance to verify against, and the shape of a hobby/mini edition isn't known yet. Full detail in **[zetaris-installation-guide.md](zetaris-installation-guide.md)** (archived — see its own banner) — covers a local `docker compose` install. This needs to reach at least a working local install before the Parquet/CSV recipe's live-verification work items can close.
 
 ## Phase 2 — Category rollout
 
