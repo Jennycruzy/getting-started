@@ -112,7 +112,7 @@ Create scripts change the instance. Inspect the dry-run, confirm object
 ownership and permissions, and get a clear go-ahead before running without
 `--dry-run`. `--skip-exists` skips "already exists" errors; inspect matching
 definitions first. A script containing `YOUR_APP_NAME YOUR_CONTACT_EMAIL`
-needs `ZETARIS_USER_AGENT`; SEC EDGAR needs your real contact email.
+needs `ZETARIS_USER_AGENT`, in the form `app_name user@domain.tld` (an app name and a contact e-mail). `company_dns` V4 and SEC EDGAR need it, and the runner rejects a value with no contact.
 
 <a id="onboard-sources-with-their-dependencies"></a>
 ## Plan recipe dependencies
@@ -140,7 +140,7 @@ duplicate errors. Sources marked `known_to_fail` need
 
 A manifest source marked `deprecated` needs `--allow-deprecated`; use its replacement instead. The former company DNS recipe 10 is replaced by recipe 12, which keeps V3 and adds V4 plus compatibility views. Recipes 13 and 14 add EU NACE and Japan.
 
-`onboard.py` sends statements back to back. For rate-limited recipes, use SQL Editor to run one statement at a time, waiting at least 15 seconds before each endpoint call identified in the recipe header. Cache the raw table immediately; after HTTP 429, wait 60 seconds and retry that statement rather than the whole script. Do not run deprecated recipe 10 alongside replacement 12 on the same instance.
+`onboard.py` sends statements back to back. For rate-limited recipes, use SQL Editor to run one statement at a time, sending an identifying User-Agent (`app_name user@domain.tld`) and, if you cannot, waiting at least 15 seconds before each endpoint call identified in the recipe header. Cache the raw table immediately; after HTTP 429, wait 60 seconds and retry that statement rather than the whole script. Do not run deprecated recipe 10 alongside replacement 12 on the same instance.
 
 ## Tear down recipe objects
 

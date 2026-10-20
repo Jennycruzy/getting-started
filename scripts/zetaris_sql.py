@@ -153,11 +153,26 @@ def _push(statements: list[str], raw: str) -> None:
         statements.append(stmt)
 
 
+USER_AGENT_FORMAT = re.compile(r"^\S.*\s[^\s@]+@[^\s@]+\.[^\s@]+$")
+USER_AGENT_HELP = (
+    "ZETARIS_USER_AGENT must be an app name followed by a contact e-mail address, "
+    "like 'zetaris dev@zetaris.com' (app_name user@domain.tld). company_dns V4 and "
+    "SEC EDGAR give a vague name, a library default or no contact the strict rate "
+    "limit or block it."
+)
+
+
+def valid_user_agent(ua: str) -> bool:
+    """True for `app_name user@domain.tld`: an app name, then a contact e-mail."""
+    return bool(USER_AGENT_FORMAT.match(ua.strip()))
+
+
 def apply_user_agent(statements: list[str]) -> list[str]:
     """Replace the repo's user-agent placeholder with ZETARIS_USER_AGENT.
 
-    Refuses to send the placeholder itself, since sources such as SEC EDGAR
-    block it.
+    Refuses to send the placeholder itself, and refuses a value that does not
+    identify the caller (`app_name user@domain.tld`): company_dns V4 and SEC EDGAR
+    throttle or block anything vaguer.
     """
     if not any(PLACEHOLDER_UA in s for s in statements):
         return statements
@@ -165,11 +180,13 @@ def apply_user_agent(statements: list[str]) -> list[str]:
     if not ua:
         raise ZetarisError(
             "This script contains the user-agent placeholder "
-            f"'{PLACEHOLDER_UA}'. Set ZETARIS_USER_AGENT in .env.local to "
-            "'<app name> <contact email>'."
+            f"'{PLACEHOLDER_UA}'. Set ZETARIS_USER_AGENT in .env.local. "
+            + USER_AGENT_HELP
         )
     if '"' in ua or "'" in ua:
         raise ZetarisError("ZETARIS_USER_AGENT must not contain quotes.")
+    if not valid_user_agent(ua):
+        raise ZetarisError(f"ZETARIS_USER_AGENT does not identify you. {USER_AGENT_HELP}")
     return [s.replace(PLACEHOLDER_UA, ua) for s in statements]
 
 

@@ -9,10 +9,11 @@
 -- cached, and it has not been confirmed that a schemastore view reads the cached
 -- raw table. Run Verification 1 first and time it: about a second means the
 -- views read the cache; much longer means each query is calling the endpoint,
--- and the rest of this file would spend the rate limit (200 a minute with a
--- burst of 20 by default, 5 a minute with a burst of 1 at the strictest; the
--- operator sets it). If that happens, stop and report it. If a query fails with
--- a 429, wait 60 seconds before retrying that one query.
+-- and the rest of this file would spend the rate limit (6,000 a minute with a
+-- burst of 600 if you send an identifying User-Agent, 600 a minute with a burst
+-- of 60 if not, raised for the event; the service default is 5 a minute, burst
+-- of 1). If that happens, stop and report it. If a query fails with a 429, wait
+-- 60 seconds before retrying that one query.
 --
 -- Views (see the table in the create script's header):
 --   sic_codes_table             V3 data, V3 column names
@@ -43,8 +44,8 @@
 
 -- 3. Independent check against the services, per HOWTO.md section 2. Two
 -- requests, one per version, run from a shell, not Zetaris:
---   curl -s "https://company-dns.mediumroast.io/V3.0/na/sic/code/%25" | jq '.data.sics | length'   # 1005
---   curl -s "https://company-dns-staging.mediumroast.io/V4.0/na/sic/code/%25" | jq '.data | length'   # 1005
+--   curl -s -A "app_name user@domain.tld" "https://company-dns.mediumroast.io/V3.0/na/sic/code/%25" | jq '.data.sics | length'   # 1005
+--   curl -s -A "app_name user@domain.tld" "https://company-dns.mediumroast.io/V4.0/na/sic/code/%25" | jq '.data | length'   # 1005
 
 -- 4. SIC 3570 is absent from both versions. Expect zero rows from each.
 -- SELECT sic_code FROM company_dns.sic_codes_table WHERE sic_code = '3570';

@@ -1,8 +1,8 @@
 -- =============================================================================
 -- Source: company_dns SIC (Standard Industrial Classification) hierarchy
 -- reference data, in BOTH API versions side by side:
---   V3 (production)  https://company-dns.mediumroast.io/V3.0/na/sic/code/%25
---   V4 (staging)     https://company-dns-staging.mediumroast.io/V4.0/na/sic/code/%25
+--   V3 (deprecated)  https://company-dns.mediumroast.io/V3.0/na/sic/code/%25
+--   V4 (production)  https://company-dns.mediumroast.io/V4.0/na/sic/code/%25
 -- 1,005 SIC codes in each, with their full hierarchy rollup. This script is
 -- the replacement for 10_company_dns_sic_create.sql (now in ../deprecated/): it
 -- reuses that script's names (database COMPANY_DNS, container company_dns, raw
@@ -21,26 +21,51 @@
 --   V4  data is a plain array of 1,005 flat objects, so a plain explode(data)
 --       is enough (SQL companion guide, section 2).
 --
--- Rate limit: YES. The operator of the service sets the limits, so they differ
--- between deployments. The built-in defaults are 200 requests a minute with a
--- burst of 20 (standard), and 5 a minute with a burst of 1 (strictest). A burst
--- larger than the allowance gets HTTP 429 even when the average is low, so
--- spread requests out and cache answers on this side. A Lightning REST table
--- re-fetches on EVERY query, so the CACHE TABLE statements below are required,
+-- Rate limit: YES, and the allowance depends on whether you identify yourself.
+-- The limits are per caller address and set by the service operator, so they can
+-- differ between deployments:
+--
+--   Caller                                   Allowance per address
+--   ---------------------------------------  ----------------------------------
+--   Identifies itself: a User-Agent with an  6,000 a minute (100 a second),
+--   e-mail address or URL, such as           burst of 600
+--   "MyTeam/1.0 (you@example.org)"
+--   Does not identify itself: no User-Agent, 600 a minute, burst of 60. This is
+--   a library default, or a name with no     raised for the event; the service
+--   contact                                  default is 5 a minute, burst of 1.
+--
+-- A burst larger than the allowance gets HTTP 429 even when the average is low,
+-- so spread requests out and cache answers on this side. A Lightning REST table
+-- re-fetches on EVERY query, so the CACHE TABLE statement(s) below are required,
 -- not optional. Run this script once, deliberately; do not loop it.
---   Pacing: if you do not know the tier, assume the strictest (one request every
---   12 seconds, no bursts). Wait 15 seconds or more before each statement
---   marked "calls the endpoint" below, and run statements one at a time. One
---   visible statement can send more than one HTTP request (Zetaris can retry a
---   failing fetch on a few pooled connections), so if a statement fails with a
---   429, wait 60 seconds before retrying that one statement.
+--   Pacing: with an identifying User-Agent (see below) run the statements at a
+--   normal pace, one at a time. Without one you are on the unidentified tier, and
+--   on the 5 a minute, burst of 1 default once the event ends: then wait 15
+--   seconds or more before each statement marked "calls the endpoint". One visible
+--   statement can send more than one HTTP request (Zetaris can retry a failing
+--   fetch on a few pooled connections), so if a statement fails with a 429, wait
+--   60 seconds before retrying that one statement.
 --
--- Hosts: the service is reachable at both URLs from the lab network and from
--- outside it; Zetaris fetches the endpoints itself.
+-- Hosts: company_dns V4 is now officially served by the production host,
+-- https://company-dns.mediumroast.io, and V3 is deprecated. The staging host
+-- (company-dns-staging.mediumroast.io) is retired: do not use it. Zetaris fetches
+-- the endpoints itself, so the Zetaris server must be able to reach the host.
 --
--- Before running: this script uses the repo's user-agent placeholder. Replace
--- YOUR_APP_NAME YOUR_CONTACT_EMAIL with your own value, or run it with
--- scripts/run_sql.py, which fills it in from ZETARIS_USER_AGENT.
+-- V3 is deprecated. Steps 1-2 (the V3 raw table) and the V3 views (Steps 6 and 9) are
+-- kept so that V3-shaped SQL, and the USL scripts that read company_dns.sic_codes_raw,
+-- keep working. The /V3.0 path still answered on the production host when checked
+-- (2026-10-19), but expect it to go away: when it does, Steps 1-2 fail, and the V3
+-- views and those USL scripts need moving to the V4 data (sic_codes_v4_compat_table
+-- carries it under the V3 names).
+--
+-- User-Agent: the service requires one of the form
+--     app_name user@domain.tld        for example:  zetaris dev@zetaris.com
+-- that is, an app name, a space, and a contact e-mail address. Something vague, such
+-- as a bare "zetaris-getting-started", a library default, or no User-Agent at all, does
+-- not identify you and gets the strict limit above. Replace the
+-- YOUR_APP_NAME YOUR_CONTACT_EMAIL placeholder in the statements below with your own
+-- value, or run the script with scripts/run_sql.py, which fills it in from
+-- ZETARIS_USER_AGENT (set it in .env.local in that same form).
 --
 -- Status: VERIFIED (recorded 2026-10-11). Run end to end against a live Zetaris
 -- instance: the V3 and V4 raw tables and all four views were created and
@@ -48,6 +73,9 @@
 -- 02_sic_edgar_usl_create.sql) were then created unchanged on top of it and
 -- queried. The USL scripts read the V3 raw table (company_dns.sic_codes_raw),
 -- not the V4 views.
+-- That run used the staging host for V4. On 2026-10-19 the production host answered
+-- the same V4 path with the same 1,005 rows, byte for byte the same size; the CREATE
+-- statements have not been re-run against it.
 -- =============================================================================
 --
 -- How the two versions name the same four levels:
@@ -117,7 +145,7 @@ CACHE TABLE company_dns.sic_codes_raw;
 -- endpoint. Shape: {code, message, module, data: [8 flat string fields],
 -- dependencies, total}.
 CREATE LIGHTNING REST TABLE sic_codes_v4_raw FROM COMPANY_DNS REQUEST(
-    endpoint "https://company-dns-staging.mediumroast.io/V4.0/na/sic/code/%25",
+    endpoint "https://company-dns.mediumroast.io/V4.0/na/sic/code/%25",
     method "get",
     response_type "json",
     http_encoding "URLENCODED"

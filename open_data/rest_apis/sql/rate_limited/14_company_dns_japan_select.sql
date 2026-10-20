@@ -9,10 +9,11 @@
 -- cached, and it has not been confirmed that a schemastore view reads the cached
 -- raw table. Run Verification 1 first and time it: about a second means the view
 -- reads the cache; much longer means each query is calling the endpoint, and the
--- rest of this file would spend the rate limit (200 a minute with a burst of 20
--- by default, 5 a minute with a burst of 1 at the strictest; the operator sets
--- it). If that happens, stop and report it. If a query fails with a 429, wait 60
--- seconds before retrying that one query.
+-- rest of this file would spend the rate limit (6,000 a minute with a
+-- burst of 600 if you send an identifying User-Agent, 600 a minute with a burst
+-- of 60 if not, raised for the event; the service default is 5 a minute, burst
+-- of 1). If that happens, stop and report it. If a query fails with a 429, wait
+-- 60 seconds before retrying that one query.
 --
 -- View: company_dns_japan.japan_table, one row per class. Levels: section
 -- (letter), division (2 digits), group (3 digits), class (4 digits). Expected
@@ -32,7 +33,7 @@
 
 -- 3. Independent check against the service, per HOWTO.md section 2. One request,
 -- run from a shell, not Zetaris:
---   curl -s "https://company-dns-staging.mediumroast.io/V4.0/japan/sic/industry_group/%25" | jq '.data | length'   # 1460
+--   curl -s -A "app_name user@domain.tld" "https://company-dns.mediumroast.io/V4.0/japan/sic/industry_group/%25" | jq '.data | length'   # 1460
 
 -- === Diagnostics === (run if the view fails or the count does not match)
 -- SELECT * FROM company_dns_japan.japan_raw;

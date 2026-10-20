@@ -9,10 +9,11 @@ These are not included in `sql/rate_limited/` or `sql/non_rate_limited/`, and ar
 | Source | Script | Status | Summary |
 |---|---|---|---|
 | Singapore data.gov.sg — PM2.5 real-time API | [`04_singapore_pm25_create.sql`](04_singapore_pm25_create.sql) | Known to fail | `CREATE LIGHTNING REST TABLE` returned an HTTP 502 on the first (and only) statement run against it. The source API itself is reachable, requires no special headers or auth, but has a real burst rate limit much tighter than documented — leading hypothesis is the connector issues more than one request per statement (schema introspection, a Data Explorer preview fetch, and/or a retry), tripping that limit. Not confirmed from the Zetaris side. See [`ISSUE.md`](ISSUE.md). |
+| NASA DONKI (CME) | [`06_nasa_donki_create.sql`](06_nasa_donki_create.sql) | Known to fail | Fails with HTTP 503 ("upstream connect error ... remote connection failure") from NASA's API gateway. The same 503 comes back from plain `curl` outside Zetaris, while NeoWs works with the same key, so the failure is NASA-side and may be transient. See [`ISSUE-06-nasa-donki.md`](ISSUE-06-nasa-donki.md). |
 
 ## Adding a new known-to-fail source
 
 1. Move the source's script pair here as-is — don't "fix" it as part of the move, since the point is to preserve the last state that hit the issue.
-2. Write (or extend) `ISSUE.md` covering: a summary, the environment, what was observed in Zetaris, independent verification against the source API directly (ruling out what it *isn't*), a root-cause hypothesis explicitly marked as unconfirmed where it is, suggested engineering debugging steps, and a recommended action (skip, retry later, or workaround).
+2. Write (or extend) `ISSUE.md`, or a separate `ISSUE-NN-<name>.md` next to the script as `ISSUE-06-nasa-donki.md` does, covering: a summary, the environment, what was observed in Zetaris, independent verification against the source API directly (ruling out what it *isn't*), a root-cause hypothesis explicitly marked as unconfirmed where it is, suggested engineering debugging steps, and a recommended action (skip, retry later, or workaround).
 3. Add a row to the index table above.
 4. Update `../../HOWTO.md` and `../../rest-api-sources.md` to reflect the source's new status and location.

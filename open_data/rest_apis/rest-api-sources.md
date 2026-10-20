@@ -17,7 +17,7 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 | 3 | Open Food Facts (live API) | Product/nutrition | Open, with a condition (ODbL) | Rate limited | Verified | `sql/rate_limited/03_open_food_facts_live_create.sql` |
 | 4 | Singapore data.gov.sg — PM2.5 real-time | Environment | Open (SODL v1.0) | Rate limited | Known to fail | `sql/known_to_fail/04_singapore_pm25_create.sql` |
 | 5 | NASA NeoWs (`/neo/browse`) | Astronomy | Open (public domain) | Rate limited | Verified | `sql/rate_limited/05_nasa_neows_create.sql` |
-| 6 | NASA DONKI (CME) | Space weather | Open (public domain) | Rate limited | Unverified | `sql/rate_limited/06_nasa_donki_create.sql` |
+| 6 | NASA DONKI (CME) | Space weather | Open (public domain) | Rate limited | Known to fail | `sql/known_to_fail/06_nasa_donki_create.sql` |
 | 7 | Eurostat REST API | Statistics | Open, with a condition | Not rate limited | Verified | `sql/non_rate_limited/07_eurostat_create.sql` |
 | 8 | Statistics Canada WDS | Statistics | Open (StatCan Open Licence) | Rate limited | Verified | `sql/rate_limited/08_statcan_wds_create.sql` |
 | 9 | Australian ABS Data API | Statistics | Open (CC-BY 3.0 AU) | Not rate limited | Verified | `sql/non_rate_limited/09_abs_data_api_create.sql` |
@@ -67,13 +67,13 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 - **Access:** `DEMO_KEY` needs no signup (30 requests/hour, 50/day per IP). A free `api.data.gov` key raises this to 1,000/hour. NeoWs and DONKI share the `DEMO_KEY` quota.
 - **Docs:** [api.nasa.gov](https://api.nasa.gov/)
 
-## 6. NASA DONKI (Space Weather) — license: open (public domain) — unverified
+## 6. NASA DONKI (Space Weather) — license: open (public domain) — known to fail
 
 - **What it is:** Coronal Mass Ejection (CME) space-weather events, queryable by date range.
 - **Licence:** same NASA public-domain basis as NeoWs.
 - **Access:** the same `api.data.gov` key and shared `DEMO_KEY` quota as NeoWs.
 - **Docs:** [api.nasa.gov](https://api.nasa.gov/) (DONKI section)
-- **Unverified:** the response is a top-level JSON array. Live registration of that shape has not been confirmed; see the create script's caveats.
+- **Known to fail:** another developer could not get this working in Zetaris, so the scripts were moved to `sql/known_to_fail/`. The call fails with HTTP 503 from NASA's API gateway ("upstream connect error ... remote connection failure"); plain `curl` gets the same 503 while NeoWs works with the same key, so the failure is on NASA's side and may be transient. It does not test the top-level-array question this source was meant to answer. See `sql/known_to_fail/ISSUE-06-nasa-donki.md`.
 
 ## 7. Eurostat REST API — license: open, with a condition
 
@@ -116,21 +116,21 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 
 - **What it is:** the same US SIC (1987 revision) hierarchy as source 10, loaded from both versions of the `company_dns` API side by side, as four schemastore views: V3 data and V4 data, each under V3 and V4 column names. V3 returns a dynamic-key object; V4 returns a flat array and renamed the hierarchy levels (V4 `division_desc` is the 2-digit level that V3 calls the major group).
 - **License:** the service itself is Apache 2.0. Its SIC data traces back to SEC's own public SIC list — query live, don't bulk-redistribute the extracted data.
-- **Access:** V3 at `https://company-dns.mediumroast.io` and V4 at `https://company-dns-staging.mediumroast.io`; no key or signup. Also self-hostable via Docker at `http://localhost:8000`. **Rate limited:** the operator sets the limits, so they differ between deployments; the built-in defaults are 200 requests a minute with a burst of 20 (standard) and 5 a minute with a burst of 1 (strictest). A burst larger than the allowance gets `429` even when the average is low, so spread requests out and cache. The script caches both raw tables for you; see its header and `HOWTO.md` section 0 for the pacing.
+- **Access:** `https://company-dns.mediumroast.io` now serves V4; V3 is deprecated (its `/V3.0` path still answered when checked, 2026-10-19, and may go away). The staging host `company-dns-staging.mediumroast.io` is retired. No key or signup, but send a User-Agent of the form `app_name user@domain.tld` (for example `zetaris dev@zetaris.com`): without it you get the strict rate limit. Also self-hostable via Docker at `http://localhost:8000`. **Rate limited:** the operator sets the limits, so they can differ between deployments. Callers that identify themselves (a User-Agent of the form `app_name user@domain.tld`) get 6,000 requests a minute (100 a second) with a burst of 600, per address. Callers that do not (no User-Agent, a library default, or a name with no contact) get 600 a minute with a burst of 60, a limit raised for the event; the service default is 5 a minute with a burst of 1. A burst larger than the allowance gets `429` even when the average is low, so spread requests out and cache. The script caches both raw tables for you; see its header and `HOWTO.md` section 0.
 - **Docs:** interactive API reference at `/docs` on the hosted instance; OpenAPI spec at `/openapi.json`.
 
 ## 13. company_dns — EU NACE hierarchy — license: open (CC BY 4.0) — rate limited
 
 - **What it is:** the EU's NACE industry classification (615 classes under 21 sections, 88 divisions and 272 groups), served by the `company_dns` V4 API at `/V4.0/eu/sic/class/%25`. Same flat-array shape as source 12's V4 endpoint, one view (`company_dns_eu.nace_table`). The counts match NACE Rev. 2, but the response does not state its revision.
 - **License:** CC BY 4.0 — [Eurostat copyright notice](https://ec.europa.eu/eurostat/help/copyright-notice). Attribution required: credit Eurostat when you reuse it. The `company_dns` service itself is Apache 2.0.
-- **Access:** `https://company-dns-staging.mediumroast.io`; no key or signup. Rate limited, same operator-set tiers as source 12 (and the same service, so leave a few minutes between running scripts 12, 13 and 14).
+- **Access:** `https://company-dns.mediumroast.io` (the staging host is retired); no key or signup, but a User-Agent of the form `app_name user@domain.tld` is required for the full allowance. Rate limited, same tiers as source 12 (and the same service).
 - **Docs:** as source 12.
 
 ## 14. company_dns — Japan industry classification — license: open (CC BY 4.0) — rate limited
 
 - **What it is:** Japan's industry classification (1,460 classes under 20 sections, 99 divisions and 530 groups), served by the `company_dns` V4 API at `/V4.0/japan/sic/industry_group/%25` (the response is class level). Same flat-array shape, one view (`company_dns_japan.japan_table`). Ids are consistent, but some descriptions are shared by more than one id, so group by id, not description. The counts match the 2013 (13th) revision, but the response does not state its revision.
 - **License:** CC BY 4.0 — [e-Stat terms of use](https://www.e-stat.go.jp/en/terms-of-use). Attribution required: credit the source when you reuse it. The `company_dns` service itself is Apache 2.0.
-- **Access:** `https://company-dns-staging.mediumroast.io`; no key or signup. Rate limited, same operator-set tiers as source 12. The response is about 420 KB, the largest of the three.
+- **Access:** `https://company-dns.mediumroast.io` (the staging host is retired); no key or signup, but a User-Agent of the form `app_name user@domain.tld` is required for the full allowance. Rate limited, same tiers as source 12. The response is about 420 KB, the largest of the three.
 - **Docs:** as source 12.
 
 ---

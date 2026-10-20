@@ -26,7 +26,7 @@ a prompt, source file, command output or URL.
 | `ZETARIS_JDBC_JAR` | Full path to the matching Zetaris driver JAR. If unset, provide the path when asked; scripts do not search for it. |
 | `ZETARIS_USERNAME` | Your Zetaris user ID |
 | `ZETARIS_PASSWORD` | Your Zetaris password |
-| `ZETARIS_USER_AGENT` | Your app name and contact email, only for create scripts that call external APIs. SEC EDGAR requires a real contact. |
+| `ZETARIS_USER_AGENT` | Your app name and contact email as `app_name user@domain.tld`, only for create scripts that call external APIs. `company_dns` V4 and SEC EDGAR need it; without it `company_dns` applies a very strict rate limit, and the runner rejects a value with no contact. |
 
 ## 4. Prepare JDBC
 
@@ -173,7 +173,7 @@ a prompt, source file, command output or URL.
 | `ZETARIS_PASSWORD` | OpenAPI spec, optional UI-proxy login | Your Zetaris password |
 | `ZETARIS_QUERY_LIMIT` | UI-proxy query helper | Positive row limit; defaults to `1000` |
 | `ZETARIS_ENGINE_ID` | UI-proxy query helper | Optional compute engine ID |
-| `ZETARIS_USER_AGENT` | Create scripts that call external APIs | Your app name and contact email. SEC EDGAR requires a real contact. |
+| `ZETARIS_USER_AGENT` | Create scripts that call external APIs | Your app name and contact email as `app_name user@domain.tld`. `company_dns` V4 and SEC EDGAR need it; the runner rejects a value with no contact. |
 
 ### Create an API key
 

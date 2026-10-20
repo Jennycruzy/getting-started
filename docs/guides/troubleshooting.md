@@ -16,7 +16,7 @@ Find your error below. For SQL limitations, see the [SQL companion](zetaris-ligh
 | JDBC won't connect | Check the driver JAR, class, Java and endpoint. On a remote agent, `localhost` is that machine. |
 | Object already exists | Check its owner and definition. Reuse a match; otherwise use your assigned team name. |
 | Table created but no rows returned | Check the source path, response, schema and Zetaris access. Start with a small `SELECT`. |
-| HTTP 429 | Wait as the source instructs. For `company_dns`, wait 60 seconds and retry that one statement. Space endpoint calls by at least 15 seconds and cache the raw table. Avoid retry loops; one statement can trigger several requests. |
+| HTTP 429 | Wait as the source instructs. For `company_dns`, first check you sent a User-Agent of the form `app_name user@domain.tld`: without it the limit is very strict. Cache the raw table, wait 60 seconds and retry that one statement; without an identifying User-Agent also space endpoint calls by at least 15 seconds. Avoid retry loops; one statement can trigger several requests. |
 | HTTP 502 | Check the source error and retry once if appropriate. `company_dns` has moved hosts and no longer uses the removed warm-up helper. On rate-limited sources, wait before another attempt. Report repeated failures. |
 | PUDL registration fails | PUDL has a [known issue](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md). Use the PokéAPI starter. |
 | A downloaded file won't query | Put it in storage Zetaris can reach. A file on your laptop may be out of reach. |

@@ -40,7 +40,12 @@ def check_env(args) -> None:
     ):
         report(bool(os.environ.get(name)), name, "set" if os.environ.get(name) else f"MISSING ({why})")
     ua = os.environ.get("ZETARIS_USER_AGENT")
-    report(None, "ZETARIS_USER_AGENT", "set" if ua else "not set (needed by any script with the YOUR_APP_NAME placeholder; SEC EDGAR requires a real contact)")
+    if not ua:
+        report(None, "ZETARIS_USER_AGENT", "not set (needed by any script with the YOUR_APP_NAME placeholder, such as the company_dns scripts and SEC EDGAR: set it to 'app_name user@domain.tld')")
+    elif z.valid_user_agent(ua):
+        report(True, "ZETARIS_USER_AGENT", "set, in the form app_name user@domain.tld")
+    else:
+        report(False, "ZETARIS_USER_AGENT", "set, but it does not identify you: use 'app_name user@domain.tld' (company_dns V4 gives anything vaguer the strict rate limit)")
 
 
 def check_rest() -> None:
