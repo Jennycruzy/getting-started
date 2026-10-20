@@ -2,7 +2,7 @@
 
 This guide covers a local Docker Compose installation. The local path was
 tested on a fresh install; see the [test record](zetaris-installation-test-record.md).
-For a managed compute cluster in your AWS account, use [Managed AWS cluster](managed-aws-cluster-guide.md).
+For a managed compute cluster in your AWS account, use [Managed AWS cluster](managed-aws-cluster-guide.md). Not sure which route to take? See [Choose an install](choose-install.md).
 
 ## 1. Obtain the distribution and access
 

@@ -2,15 +2,22 @@
 
 Create a Zetaris compute cluster in your AWS account, sign in to its Gateway and run a query.
 
-For Docker Compose on your own computer, see [Install locally](updated_zetaris_installation_guide.md).
+For Docker Compose on your own computer, see [Install locally](updated_zetaris_installation_guide.md). Not sure which route to take? See [Choose an install](choose-install.md).
 
 ## Before you start
 
-- Sign in to Zetaris Cloud Gateway and the AWS account that will own the resources.
+- Sign in to Zetaris Cloud Gateway and the AWS account that will own the resources. A **new AWS account on the Free Tier** is the best choice: set one up with the [AWS Free Tier checklist](aws-free-tier-checklist.md) and the cluster draws on your free credits. An existing account also works, but AWS bills it normally. See [Costs and the AWS Free Tier](#costs-and-the-aws-free-tier).
+- In the AWS Billing and Cost Management console, check which plan the account is on and what credit balance it has.
 - Use an AWS identity with permission to create and delete the supplied CloudFormation stack and its resources. Review the IAM permissions requested by the stack with your AWS administrator if needed.
-- Review the AWS cost notice under **Compute > Credentials**. AWS bills these resources directly to your AWS account, separately from your Zetaris tier. The estimate depends on its stated region, date and assumptions.
+- Review the AWS cost notice under **Compute > Credentials**. It is the authority for the estimate for your account, and depends on its stated region, date and assumptions.
 
-AWS account setup creates networking, a storage bucket and access roles. Billable resources can incur charges from setup completion until you delete them, even when no compute cluster is running. Suspending a cluster does not remove the account setup or retained storage.
+## Costs and the AWS Free Tier
+
+The Zetaris developer/free edition is scoped to the size available on each platform, and Zetaris does not charge for storage. The cost of this guide is the AWS resources it creates, and AWS bills those to your AWS account, separately from Zetaris. What that means depends on the account:
+
+- **A new account on the AWS Free plan.** AWS does not charge you while you are on the Free plan. The resources draw on your credits instead: $100 at sign-up plus up to $100 from five activities (see the [checklist](aws-free-tier-checklist.md)). The Mini cluster in this guide runs on a Free plan account. In Zetaris testing, a Mini cluster running non-stop for about a week used roughly $80 of the credits, so a five-day event fits comfortably within $200. Your usage depends on the region and how long you leave it running, so check the balance as you go.
+- **The Free plan has an end date.** It ends after six months or when the credits are used, whichever comes first. AWS then closes the account, keeps its content for 90 days, and lets you upgrade to a Paid plan in that time. Plan to delete your cluster and its stack well before then.
+- **An existing or standard account.** The free credits do not apply. AWS account setup creates networking, a storage bucket and access roles, and billable resources can incur charges from setup completion until you delete them, even when no compute cluster is running. Suspending a cluster does not remove the account setup or retained storage.
 
 ## 1. Add and verify your AWS account
 
@@ -87,7 +94,7 @@ Zetaris cannot delete this CloudFormation stack for you. You must use your own A
 
 The required teardown is complete when the cluster is **Deleted**, the CloudFormation stack has reached `DELETE_COMPLETE`, and the credential appears under **Deleted** in Zetaris.
 
-EFS and S3 storage can remain after this teardown. Deleting retained storage is optional and permanently removes any data it contains. AWS may continue charging for retained storage and other billable resources.
+EFS and S3 storage can remain after this teardown. Deleting retained storage is optional and permanently removes any data it contains. AWS may continue charging for retained storage and other billable resources. On a Free Tier account, retained storage keeps drawing on your credits until you delete it. If the credits run out, or the Free plan reaches six months, AWS closes the account and deletes its content after 90 days unless you upgrade, so copy anything you need before then.
 
 To review your retained storage, record the **EFS ID** from the cluster **Overview**. Find the workspace bucket's physical ID under **CloudFormation > Resources > WorkspaceS3Bucket**. Review each resource in AWS before deciding whether to keep it.
 

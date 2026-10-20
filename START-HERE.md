@@ -4,12 +4,12 @@ Query the supplied samples, connect your own data, then build your hackathon pro
 
 ## 1. Check your prerequisites
 
-Set up your own Zetaris instance using one of the routes below. Then sign in with your account.
+Set up your own Zetaris instance using one of the routes below. If your computer meets the requirements, you can start local. Otherwise, install Zetaris on AWS. [Choose an install](docs/install/choose-install.md) explains how to decide, and you can do both. Then sign in with your account.
 
 | Access route | Start here |
 |---|---|
 | Your computer | Download from [Zetaris Cloud's Run locally page](https://cloud.enterprise.zetaris.com/dashboard/download), then follow [Install locally](docs/install/updated_zetaris_installation_guide.md). |
-| Managed AWS cluster | Use [Managed AWS cluster](docs/install/managed-aws-cluster-guide.md) to connect your AWS account and create a Zetaris compute cluster from Zetaris Cloud. |
+| Managed AWS cluster | New to AWS? Follow the [AWS Free Tier checklist](docs/install/aws-free-tier-checklist.md) to unlock $200 in credits. Then use [Managed AWS cluster](docs/install/managed-aws-cluster-guide.md) to connect your AWS account and create a Zetaris compute cluster from Zetaris Cloud. |
 
 ## 2. Run some SQL
 
