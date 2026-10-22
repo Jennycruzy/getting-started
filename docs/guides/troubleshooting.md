@@ -10,7 +10,7 @@ Find your error below. For SQL limitations, see the [SQL companion](zetaris-ligh
 | Local install won't start | Run `preflight.sh` from the platform bundle and follow the [install guide](../install/updated_zetaris_installation_guide.md). Check registry access, memory, disk and configuration. |
 | Login fails or HTTP 401 | Check the URL and credentials. Changing the platform's `.env` after setup does not reset an account. |
 | REST preflight says `Operation not permitted` for localhost | The command environment may have blocked local network access before Zetaris returned an HTTP response. In Codex, retry the read-only command with the requested network or elevated execution permission if offered. Do not change the API URL or key based on this error. If permission is unavailable, run the command in a terminal that can reach the instance. |
-| Permission error or HTTP 403 | Check your organisation, team names and account permissions. Use your own account. |
+| Permission error or HTTP 403 | Check your organisation, team names and account permissions. Use your own account. Creating, updating and deleting normally needs an administrator or a delegated Write role: see [Permissions](permissions.md). |
 | Missing or invalid org ID | Follow [HTTP setup](../../scripts/HOWTO.md#find-your-organization-id) and use your numeric ID. SQL Editor does not need this setting. |
 | HTTP 404 or an HTML response | Use the UI URL that supports the helper's proxy routes. The raw API port does not. |
 | JDBC won't connect | Check the driver JAR, class, Java and endpoint. On a remote agent, `localhost` is that machine. |

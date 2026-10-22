@@ -118,6 +118,7 @@ Lightning databases; an empty list is normal on a clean instance.
 - Send one Lightning SQL statement per call. Keep a multi-table `COMPILE USL`
   together as one statement; do not split it at semicolons.
 - Keep credentials out of prompts, logs, source files, and commits.
+- Use the least privilege that works: agents and applications that only read should use their own non-administrator user, and creating, updating and deleting stays with administrators. See [Permissions in Zetaris](../guides/permissions.md).
 
 ## 10. Troubleshooting
 
@@ -264,6 +265,7 @@ preflight does not verify the UI-proxy route.
 - Send one Lightning SQL statement per call. Keep a multi-table `COMPILE USL`
   together as one statement; do not split it at semicolons.
 - Keep credentials out of prompts, logs, source files, and commits.
+- Use the least privilege that works: agents and applications that only read should use their own non-administrator user, and creating, updating and deleting stays with administrators. See [Permissions in Zetaris](../guides/permissions.md).
 
 ## 9. Fetch the OpenAPI specification
 

@@ -109,7 +109,7 @@ Drafted in the working tree on `claude/aws-free-tier-docs`, **not committed**, f
 - **Account closure deletes data.** A Free plan account that runs out of credits closes and loses its data after 90 days. The guide must say this clearly, because a running cluster consumes credits.
 - **The cost observation is one test.** It depends on cluster size, region and uptime; the wording must say so.
 - **Checklist depth.** Without sign-up and console screenshots, the checklist is only as detailed as AWS's own documentation. It can send people to the right pages but cannot walk them through every click.
-- **Not an AWS or legal statement.** The pages summarise AWS's terms and link to them, and say that AWS's own pages govern.
+- **Not an AWS or legal statement.** The pages summarize AWS's terms and link to them, and say that AWS's own pages govern.
 
 ## Sources
 

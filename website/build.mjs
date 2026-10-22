@@ -38,6 +38,7 @@ const groups = [
   ]],
   ['Help and reference', [
     ['docs/guides/troubleshooting.md', 'Troubleshooting'],
+    ['docs/guides/permissions.md', 'Permissions'],
     ['docs/guides/zetaris-lightning-sql-commands.md', 'Lightning SQL commands'],
     ['docs/guides/zetaris-lightning-sql-companion.md', 'SQL gotchas and limits'],
   ]],
