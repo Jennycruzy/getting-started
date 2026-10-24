@@ -1,8 +1,25 @@
 # Failure case: Singapore data.gov.sg PM2.5 API — HTTP 502 on `CREATE LIGHTNING REST TABLE`
 
-**Status:** Known to fail — kept out of `sql/rate_limited/` and `sql/non_rate_limited/`. Not required for this package's goals (the other sources already cover the JSON-shape range needed); kept here as a flagged item for engineering to debug rather than dropped silently.
+**Status:** Verified on 2026-10-24 in a different environment (Zetaris 2.4.3.1, local Docker bundle, SQL API); the scripts moved to [`../rate_limited/`](../rate_limited/04_singapore_pm25_create.sql). The 2026-09-19 HTTP 502 below (cloud SQL Workspace) is **contradicted by a later run, not yet reconciled**: the later run did not exercise the cloud SQL Workspace or its Data Explorer preview, so it does not show that the original 502 cannot happen there. This write-up is kept as the record of that run.
 
-**Source script:** [`04_singapore_pm25_create.sql`](04_singapore_pm25_create.sql) (unchanged from its last working state, moved here as-is)
+**Source script:** [`../rate_limited/04_singapore_pm25_create.sql`](../rate_limited/04_singapore_pm25_create.sql) (moved out of this folder after the later run; the version that hit the 502 is in git history)
+
+## Later run (2026-10-24): what was confirmed
+
+Environment: Zetaris 2.4.3.1 from the local Docker bundle; every statement sent through the SQL API (`/api/proxy/sql-editor/sqls/run-query`), one at a time, 10–15 seconds apart. The Data Explorer UI was not used.
+
+1. **The original `CREATE LIGHTNING REST TABLE` succeeded**, and `SELECT code, size(data.items)` on it returned `0, 24` (24 hourly readings for 2026-09-18). No 502.
+2. **Uncached, every query re-fetched the endpoint, and the source's 429 came through as a 429.** Eight identical `SELECT`s sent back to back: six succeeded, then the 7th and 8th failed with `REST API call failed: Server returned HTTP response code: 429 for URL: https://api-open.data.gov.sg/v2/real-time/api/pm25?date=2026-09-18`. In this environment a rate-limited fetch surfaced as a 429, not a 502. That narrows, but does not answer, the open 502-vs-429 question in the root-cause section below.
+3. **`CACHE TABLE` stopped the re-fetching** (the lead under "If revisiting this source" below). After `CACHE TABLE sg_datagovsg_rest.pm25_readings_20260918`, 8 and then 20 identical `SELECT`s sent back to back all succeeded, in about 0.1–0.25 s each instead of about 0.4 s. The create script now caches the raw table straight after creating it.
+4. **A separate SQL problem, never reached in the first run:** the long-format view, written as five `SELECT`s from `pm25_readings_table` joined by `UNION ALL`, failed at `CREATE SCHEMASTORE VIEW` with `MISSING_ATTRIBUTES.RESOLVED_ATTRIBUTE_APPEAR_IN_OPERATION` (companion guide section 4). Rewritten as one pass over the base table with `LATERAL VIEW stack()`, it returns the expected 120 rows (24 readings × 5 regions).
+5. **The results match the source.** Per-region average, minimum and maximum from example query 2 equal the same figures computed in Python from the `curl` response (central 34.3 / 11 / 61, west 31.8 / 19 / 59, north 25.3 / 7 / 50, east 25.0 / 14 / 46, south 21.8 / 8 / 49).
+6. **From a clean slate:** after `DROP VIEW` ×3, `UNCACHE TABLE`, `DROP LIGHTNING DATABASE TABLE` and `DROP LIGHTNING DATABASE`, the committed create script (7 statements) and select script (8 queries) ran in order. Every statement succeeded except `CREATE SCHEMASTORE CONTAINER singapore`, which reported that the container already existed (expected on a re-run; there is no `IF NOT EXISTS`).
+
+Still open: whether the original 502 came from the cloud SQL Workspace's Data Explorer preview (hypothesis 2 below) or from that environment's connector version. Engineering's debugging steps below still apply to that path.
+
+---
+
+## Original write-up (2026-09-19)
 
 **Reported by:** Michael Hay, 2026-09-19
 
@@ -113,6 +130,6 @@ Skip this source. The other 8 REST sources in this package already cover the JSO
 
 ## References
 
-- Script: [`04_singapore_pm25_create.sql`](04_singapore_pm25_create.sql)
+- Script: [`../rate_limited/04_singapore_pm25_create.sql`](../rate_limited/04_singapore_pm25_create.sql)
 - `../../HOWTO.md`, "Troubleshooting / FAQ" — the general "`CREATE LIGHTNING REST TABLE` ... returned an HTTP 502" entry links back here for the full writeup
 - `../../rest-api-sources.md` — source catalog entry updated to reflect this status

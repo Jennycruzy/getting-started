@@ -113,10 +113,10 @@
     {
       "id": "singapore_pm25",
       "kind": "rest",
-      "script": "open_data/rest_apis/sql/known_to_fail/04_singapore_pm25_create.sql",
-      "status": "known_to_fail",
+      "script": "open_data/rest_apis/sql/rate_limited/04_singapore_pm25_create.sql",
+      "status": "verified",
       "requires": [],
-      "summary": "Singapore PM2.5 real-time API (HTTP 502 on create)"
+      "summary": "Singapore PM2.5 real-time API (tight burst limit; cached after create)"
     },
     {
       "id": "noaa_ghcn",

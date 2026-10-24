@@ -1,10 +1,8 @@
 -- =============================================================================
 -- Source: Singapore data.gov.sg -- PM2.5 (air quality) real-time API.
--- Blocked: see ../ISSUE.md for the full investigation. This script and
--- its selects still document the working query pattern for reference,
--- but the first CREATE LIGHTNING REST TABLE statement returned an HTTP
--- 502 in testing (see caveat 4) and this source was set aside rather
--- than pursued further.
+-- Moved from sql/known_to_fail/ on 2026-10-24 after a live run passed
+-- (see Status below). The original HTTP 502 write-up stays at
+-- ../known_to_fail/ISSUE.md as the record of the earlier run.
 --
 -- License: Singapore Open Data Licence (SODL) v1.0 --
 -- https://data.gov.sg/open-data-licence -- worldwide, perpetual,
@@ -25,6 +23,16 @@
 --
 -- Before running: sanity-check the endpoint returns something sane:
 --   curl -s "https://api-open.data.gov.sg/v2/real-time/api/pm25?date=2026-09-18" | python3 -m json.tool | head -30
+--
+-- Status: live-tested and confirmed working (2026-10-24) on Zetaris
+-- 2.4.3.1 (local Docker bundle, statements sent through the SQL API, one
+-- at a time, 10-15 seconds apart): the database, container, base table,
+-- CACHE TABLE, all three views, and all 8 example queries in the select
+-- script ran successfully. Per-region average/min/max from example query
+-- 2 match the same figures computed directly from the curl response.
+-- The earlier HTTP 502 (cloud SQL Workspace, 2026-09-19) did not
+-- reproduce in this environment; see caveat 4. The Data Explorer
+-- preview path in the cloud SQL Workspace was not re-tested.
 -- =============================================================================
 --
 -- Caveats:
@@ -50,17 +58,32 @@
 --      complete past day, confirmed via curl). This script uses a
 --      fixed past date (2026-09-18) so the example is reproducible.
 --   4. A plain GET needs no special header or authentication at all --
---      confirmed via repeated curl testing. A single
---      CREATE LIGHTNING REST TABLE run against this endpoint still
---      returned an HTTP 502 in the Zetaris SQL Workspace, with no other
---      query run beforehand. Likely explanation: this endpoint's real
---      rate limit is much tighter than documented -- testing found it
---      trips a 429 after roughly 5-6 requests within 5-8 seconds,
---      recovering after about 30 seconds -- and a single visible
---      statement in the SQL Workspace does not necessarily mean a
---      single HTTP request reached the endpoint. See the SQL companion
---      guide for the general causes of an HTTP 502 on this kind of
---      statement.
+--      confirmed via repeated curl testing. The endpoint's real burst
+--      limit is much tighter than documented: about 5-6 requests within
+--      5-8 seconds trips a 429, which clears after about 30 seconds.
+--      On 2026-09-19 a single CREATE LIGHTNING REST TABLE in the cloud
+--      SQL Workspace returned HTTP 502 (../known_to_fail/ISSUE.md). On
+--      2026-10-24 (Zetaris 2.4.3.1, SQL API) the same statement
+--      succeeded, and the rate limit behaved as follows:
+--        - Uncached, every query re-fetched the endpoint: 8 identical
+--          SELECTs sent back to back returned 6 successes, then
+--          "REST API call failed: Server returned HTTP response code:
+--          429" on the 7th and 8th. The source's 429 came through as a
+--          429, not a 502.
+--        - After CACHE TABLE, 8 and then 20 identical SELECTs sent back
+--          to back all succeeded, each in about 0.1-0.25 s instead of
+--          about 0.4 s. The cache stopped the re-fetching.
+--      Hence the CACHE TABLE step straight after the base table below.
+--      Run the statements one at a time and wait about 30 seconds after
+--      any 429 before retrying.
+--   5. The long-format view (pm25_readings_long_table) used to be five
+--      SELECTs from pm25_readings_table joined by UNION ALL. On
+--      2026-10-24 that CREATE SCHEMASTORE VIEW failed with
+--      MISSING_ATTRIBUTES.RESOLVED_ATTRIBUTE_APPEAR_IN_OPERATION, the
+--      same error the SQL companion guide section 4 describes for a
+--      view referenced more than once in one query. The view below
+--      builds the same 120 rows (24 readings x 5 regions) in one pass
+--      with LATERAL VIEW stack(), reading the base table once.
 -- =============================================================================
 
 -- Step 0: Lightning database for this source.
@@ -78,6 +101,10 @@ CREATE LIGHTNING REST TABLE pm25_readings_20260918 FROM SG_DATAGOVSG_REST REQUES
     http_encoding "URLENCODED"
 ) HEADER (
 ) BODY ();
+
+-- Cache the raw REST table before running anything else against it --
+-- see caveat 4.
+CACHE TABLE sg_datagovsg_rest.pm25_readings_20260918;
 
 -- Wide-format view -- one row per hourly reading, one column per region.
 CREATE SCHEMASTORE VIEW pm25_readings_table WITH CONTAINER singapore AS
@@ -106,17 +133,22 @@ LATERAL VIEW explode(data.regionMetadata) AS region;
 -- Long-format cross-region view -- one row per (timestamp, region) pair
 -- instead of one column per region, which makes GROUP BY region,
 -- ORDER BY value, and per-hour ranking queries more natural than
--- pivoting on 5 separate columns every time.
+-- pivoting on 5 separate columns every time. Built in one pass with
+-- stack() rather than five UNION ALL branches -- see caveat 5.
 CREATE SCHEMASTORE VIEW pm25_readings_long_table WITH CONTAINER singapore AS
-SELECT reading_timestamp, 'north' AS region, pm25_north AS pm25 FROM singapore.pm25_readings_table
-UNION ALL
-SELECT reading_timestamp, 'south' AS region, pm25_south AS pm25 FROM singapore.pm25_readings_table
-UNION ALL
-SELECT reading_timestamp, 'east' AS region, pm25_east AS pm25 FROM singapore.pm25_readings_table
-UNION ALL
-SELECT reading_timestamp, 'west' AS region, pm25_west AS pm25 FROM singapore.pm25_readings_table
-UNION ALL
-SELECT reading_timestamp, 'central' AS region, pm25_central AS pm25 FROM singapore.pm25_readings_table;
+SELECT
+    item.timestamp AS reading_timestamp,
+    r.region,
+    r.pm25
+FROM sg_datagovsg_rest.pm25_readings_20260918
+LATERAL VIEW explode(data.items) AS item
+LATERAL VIEW stack(5,
+    'north',   item.readings.pm25_one_hourly.north,
+    'south',   item.readings.pm25_one_hourly.south,
+    'east',    item.readings.pm25_one_hourly.east,
+    'west',    item.readings.pm25_one_hourly.west,
+    'central', item.readings.pm25_one_hourly.central
+) r AS region, pm25;
 
 -- =============================================================================
 -- Teardown -- removes the flattened views this script created.
@@ -130,3 +162,4 @@ SELECT reading_timestamp, 'central' AS region, pm25_central AS pm25 FROM singapo
 -- DROP VIEW singapore.pm25_readings_long_table;
 -- DROP VIEW singapore.pm25_regions_table;
 -- DROP VIEW singapore.pm25_readings_table;
+-- UNCACHE TABLE sg_datagovsg_rest.pm25_readings_20260918;

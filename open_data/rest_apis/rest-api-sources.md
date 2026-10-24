@@ -15,7 +15,7 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 | 1 | SEC EDGAR XBRL Company Facts | Financial/regulatory | Ambiguous | Rate limited | Verified | `sql/rate_limited/01_edgar_company_facts_create.sql` |
 | 2 | PokéAPI | Structured game data | Open (BSD-3-Clause) | Not rate limited | Verified | `sql/non_rate_limited/02_pokeapi_create.sql` |
 | 3 | Open Food Facts (live API) | Product/nutrition | Open, with a condition (ODbL) | Rate limited | Verified | `sql/rate_limited/03_open_food_facts_live_create.sql` |
-| 4 | Singapore data.gov.sg — PM2.5 real-time | Environment | Open (SODL v1.0) | Rate limited | Known to fail | `sql/known_to_fail/04_singapore_pm25_create.sql` |
+| 4 | Singapore data.gov.sg — PM2.5 real-time | Environment | Open (SODL v1.0) | Rate limited | Verified | `sql/rate_limited/04_singapore_pm25_create.sql` |
 | 5 | NASA NeoWs (`/neo/browse`) | Astronomy | Open (public domain) | Rate limited | Verified | `sql/rate_limited/05_nasa_neows_create.sql` |
 | 6 | NASA DONKI (CME) | Space weather | Open (public domain) | Rate limited | Known to fail | `sql/known_to_fail/06_nasa_donki_create.sql` |
 | 7 | Eurostat REST API | Statistics | Open, with a condition | Not rate limited | Verified | `sql/non_rate_limited/07_eurostat_create.sql` |
@@ -52,13 +52,13 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 - **Access:** no signup; send a custom `User-Agent` and observe endpoint rate limits.
 - **Docs:** [openfoodfacts.github.io/openfoodfacts-server/api](https://openfoodfacts.github.io/openfoodfacts-server/api/)
 
-## 4. Singapore data.gov.sg — PM2.5 real-time API — license: open (SODL v1.0) — known to fail
+## 4. Singapore data.gov.sg — PM2.5 real-time API — license: open (SODL v1.0)
 
 - **What it is:** hourly national PM2.5 readings.
 - **Licence:** Singapore Open Data Licence (SODL) v1.0, also used by the data.gov.sg CSV source in [`../parquet_csv/`](../parquet_csv/parquet-csv-data-sources.md).
 - **Access:** no key or headers. The documented limit is 5 requests/minute; testing hit a tighter burst limit.
 - **Docs:** [guide.data.gov.sg/developer-guide/real-time-apis](https://guide.data.gov.sg/developer-guide/real-time-apis)
-- **Status:** the first `CREATE LIGHTNING REST TABLE` returned HTTP 502. See the [issue write-up](sql/known_to_fail/ISSUE.md); this source is excluded from the main sequence.
+- **Status:** verified 2026-10-24 on Zetaris 2.4.3.1 (local Docker, SQL API): every create statement and all 8 example queries ran, and query 2's per-region figures match the raw API. The create script caches the raw table straight after creating it; uncached, the 7th of 8 back-to-back queries got the source's 429. An earlier run in the cloud SQL Workspace returned HTTP 502; that [issue write-up](sql/known_to_fail/ISSUE.md) is kept, marked contradicted by a later run and not yet reconciled.
 
 ## 5. NASA NeoWs (Near Earth Object Web Service) — license: open (public domain)
 
