@@ -26,6 +26,8 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 | 12 | company_dns — US SIC hierarchy, V3 and V4 | Industry classification | Apache 2.0 (traces to SEC's public SIC list) | Rate limited | Verified | `sql/rate_limited/12_company_dns_create.sql` |
 | 13 | company_dns — EU NACE hierarchy | Industry classification | Open (CC BY 4.0, Eurostat) | Rate limited | Verified | `sql/rate_limited/13_company_dns_eu_nace_create.sql` |
 | 14 | company_dns — Japan industry classification | Industry classification | Open (CC BY 4.0, e-Stat) | Rate limited | Verified | `sql/rate_limited/14_company_dns_japan_create.sql` |
+| 15 | CDC PLACES census tract health estimates, Montgomery County AL | Public health | Public domain (CDC) | No limit asserted; cache and stop on 429 | Verified | `sql/non_rate_limited/15_cdc_places_tracts_create.sql` |
+| 16 | Census TIGERweb census tracts, Montgomery County AL | Geography | Public domain (US federal work) | No limit asserted; cache and stop on 429 | Verified | `sql/non_rate_limited/16_census_tigerweb_create.sql` |
 
 "Verified" means the create script's `CREATE`/`CACHE` statements and its matching select script's example queries have been run successfully against a live Zetaris instance. "Unverified" means the script is written and believed correct but hasn't been run live yet. "Deprecated" means a newer script replaced it: it is kept for reference only and must not be run on the same instance as its replacement. "Known to fail" means it was run and hit a blocking issue — kept as a documented example, not a live source to build on.
 
@@ -132,6 +134,22 @@ A catalog of REST sources registered with `CREATE LIGHTNING REST TABLE`. Each en
 - **License:** CC BY 4.0 — [e-Stat terms of use](https://www.e-stat.go.jp/en/terms-of-use). Attribution required: credit the source when you reuse it. The `company_dns` service itself is Apache 2.0.
 - **Access:** `https://company-dns.mediumroast.io` (the staging host is retired); no key or signup, but a User-Agent of the form `app_name user@domain.tld` is required for the full allowance. Rate limited, same tiers as source 12. The response is about 420 KB, the largest of the three.
 - **Docs:** as source 12.
+
+## 15. CDC PLACES census tract health estimates — license: open (public domain)
+
+- **What it is:** CDC's model-based estimates of adult health measures (asthma, diabetes, blood pressure and about 40 more) for every census tract, here filtered to Montgomery County, Alabama (`countyfips = '01101'`, 71 tracts). Socrata returns a bare top-level JSON array, so columns are read directly.
+- **License:** public domain. CDC: most information on its websites "is not subject to copyright, is in the public domain, and may be freely used or reproduced without obtaining copyright permission" ([agency materials](https://www.cdc.gov/other/agencymaterials.html)); the dataset metadata also labels it Public Domain.
+- **Access:** no key; anonymous Socrata requests may be throttled, so cache the raw table.
+- **Docs:** [dataset yjkw-uj5s](https://data.cdc.gov/Health-Status/PLACES-Census-Tract-Data-GIS-Friendly-Format-2025-/yjkw-uj5s), [SoQL queries](https://dev.socrata.com/docs/queries/)
+- **Status:** verified 2026-10-26 on Zetaris 2.4.3.1. Every create statement and both select queries ran; `COUNT(*)` on the records view returned 71, the source's own count.
+
+## 16. Census TIGERweb census tracts — license: open (public domain)
+
+- **What it is:** census tract identifiers, names, land area and boundaries from the Census Bureau's TIGERweb ArcGIS MapServer, for the same county (71 tracts). The response is an ArcGIS `features` array, exploded into rows; one 2,000-record page covers the county.
+- **License:** public domain (US federal government work, 17 U.S.C. §105). The service credits "Source: U.S. Census Bureau"; the [Census API terms](https://www.census.gov/data/developers/about/terms-of-service.html) ask that the Census Bureau be named as the source and the content not be modified or misrepresented.
+- **Access:** no key.
+- **Docs:** [TIGERweb Tracts_Blocks layer 0](https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/0)
+- **Status:** verified 2026-10-26 on Zetaris 2.4.3.1. Every create statement and both select queries ran; `COUNT(*)` on the records view returned 71, the source's own count.
 
 ---
 

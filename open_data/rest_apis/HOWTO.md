@@ -311,3 +311,11 @@ No source here uses parallel arrays such as `times: [...]` and `values: [...]`. 
 ## 8. Everything else
 
 For licenses and source links, see [`rest-api-sources.md`](rest-api-sources.md). The [SQL companion](../../docs/guides/zetaris-lightning-sql-companion.md#1-the-two-onboarding-patterns-this-repo-has-proven) compares REST, file, and JDBC onboarding. Other categories are tracked in [`docs/plans/FUTURES.md`](../../docs/plans/FUTURES.md).
+
+### PLACES: Census Tract Data (GIS Friendly Format), 2025 release
+
+The 15_cdc_places_tracts pair registers the Socrata endpoint for one county's 71 tracts (a bare JSON array, so columns read directly), caches the raw table, and creates a records view. Verified live on 2026-10-26. Licence and source details are in the catalog.
+
+### Census TIGERweb census tracts
+
+The 16_census_tigerweb pair registers an ArcGIS MapServer query for the same county's 71 tracts, explodes the `features` array (2,000 records per page, one page here), caches the raw table, and creates a records view. Verified live on 2026-10-26. Licence and source details are in the catalog.
