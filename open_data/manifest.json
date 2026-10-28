@@ -194,6 +194,22 @@
         "edgar_profiles"
       ],
       "summary": "Two-table, FK-related USL: EDGAR companies and the SIC hierarchy"
+    },
+    {
+      "id": "cdc_places_tracts",
+      "kind": "rest",
+      "script": "open_data/rest_apis/sql/non_rate_limited/15_cdc_places_tracts_create.sql",
+      "status": "verified",
+      "requires": [],
+      "summary": "CDC PLACES 2025 census tract health estimates for Montgomery County, AL (71 tracts)"
+    },
+    {
+      "id": "census_tigerweb",
+      "kind": "rest",
+      "script": "open_data/rest_apis/sql/non_rate_limited/16_census_tigerweb_create.sql",
+      "status": "verified",
+      "requires": [],
+      "summary": "Census TIGERweb census tracts for Montgomery County, AL (71 tracts)"
     }
   ]
 }
