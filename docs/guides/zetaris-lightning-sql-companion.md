@@ -115,6 +115,18 @@ WHERE rn = 1;
 
 For a count threshold, use `COUNT(*) OVER (PARTITION BY key)`. This avoids the repeated view reference that triggered the error in the tested examples.
 
+The same error can come from a view *definition* that reads one view several times. On 2.4.3.1 (24 October 2026), a `CREATE SCHEMASTORE VIEW` made of five `UNION ALL` branches over the same view failed with it (Singapore PM2.5's long-format view). To unpivot columns into rows, read the base table once and use `stack()`:
+
+```sql
+SELECT item.timestamp AS reading_timestamp, r.region, r.pm25
+FROM sg_datagovsg_rest.pm25_readings_20260918
+LATERAL VIEW explode(data.items) AS item
+LATERAL VIEW stack(2,
+    'north', item.readings.pm25_one_hourly.north,
+    'south', item.readings.pm25_one_hourly.south
+) r AS region, pm25;
+```
+
 ---
 
 ## 5. Operational limitations (confirmed live, not documentation guesses)
@@ -128,7 +140,7 @@ Live-check scope on 12 October 2026, Zetaris 2.4.3.1: 96 of 144 SQL command entr
 - **Table removal:** On 12 October 2026, `DROP LIGHTNING DATABASE TABLE` removed `reason` from a public S3 filestore registration and `ability` from a public PokéAPI REST registration on Zetaris 2.4.3.1. A `SELECT id, name` returned data from `ability` before the drop. `DROP LIGHTNING DATABASE` then removed the test database. These fixtures do not prove removal works for every connector or registration; use Data Explorer's **File Source & API** panel for an unconfirmed object.
 - **Source failures:** PUDL registration fails on its dotted bucket name ([issue record](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-03-pudl.md)), while Ookla registration returned a 500 with no confirmed cause ([issue record](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-07-ookla.md)). Foursquare, Overture and GBIF registered but failed queries in their tested forms ([Foursquare](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-04-foursquare.md), [Overture](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-05-overture.md), [GBIF](../../open_data/parquet_csv/sql/known_to_fail/ISSUE-08-gbif.md)). A successful `CREATE` alone does not confirm a usable table.
 - **Rate limits:** `company_dns` V4 is rate limited, and the allowance depends on whether you identify yourself, per the service operator. Callers that identify themselves (a User-Agent of the form `app_name user@domain.tld`) get 6,000 requests a minute (100 a second) with a burst of 600, per address. Callers that do not (no User-Agent, a library default, or a name with no contact) get 600 a minute with a burst of 60, a limit raised for the event; the service default is 5 a minute with a burst of 1. Send a User-Agent of the form `app_name user@domain.tld` on every request (in the create scripts, the `user-agent` header), cache the raw table, and wait 60 seconds after a 429 before retrying that statement; without an identifying User-Agent also space endpoint-calling statements by at least 15 seconds. One statement can trigger several pooled retries. Scripts 12–14 include the cache steps; these limits are operator guidance, not measurements from the SQL command check.
-- **HTTP errors:** Singapore PM2.5 returned 502 under source rate limiting. `company_dns` previously returned a cold-start 502 and worked on retry; the incoming recipe record says its new host no longer scales to zero and the warm-up helper has been removed. Check the source and wait before retrying; do not treat all 502s as the same failure.
+- **HTTP errors:** Singapore PM2.5 returned 502 in the cloud SQL Workspace under source rate limiting. On 2.4.3.1 through the SQL API (24 October 2026), rapid uncached queries against it surfaced the source's own 429 (`REST API call failed: Server returned HTTP response code: 429`), and after `CACHE TABLE` 20 back-to-back queries all succeeded; the original 502 is not yet reconciled ([issue record](../../open_data/rest_apis/sql/known_to_fail/ISSUE.md)). `company_dns` previously returned a cold-start 502 and worked on retry; the incoming recipe record says its new host no longer scales to zero and the warm-up helper has been removed. Check the source and wait before retrying; do not treat all 502s as the same failure.
 - **JSON request bodies:** Repo scripts use an empty body with `http_encoding "URLENCODED"`. StatCan's JSON endpoint returned 415 with that form. A working JSON-body form has not been confirmed.
 - **Row counts:** Earlier repo runs recorded grid/footer count differences. Compare query results with the source before assuming Zetaris lost rows. Joins can also exclude records: the SIC/EDGAR inner join omitted IBM because its SIC code `3570` was missing from the reference. This is separate from the UI-count observation; see the [USL model checks](../../open_data/usl/usl-sources.md).
 

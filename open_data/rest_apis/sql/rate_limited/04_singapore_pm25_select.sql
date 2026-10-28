@@ -4,11 +4,13 @@
 --
 -- The verification queries below are commented out by default so that
 -- running this whole file doesn't automatically fire read queries
--- against every view -- this source is excluded from the main
--- sequence (see ../ISSUE.md) precisely because of a tight, easy-to-trip
--- rate limit. Uncomment what you want to run, or run it directly in the
--- SQL Editor. The example queries further down are left live, same as
--- before.
+-- against every view -- this source has a tight, easy-to-trip burst
+-- rate limit (create script caveat 4). The create script caches the raw
+-- table, so once it has run these queries read the cached copy; run the
+-- create script's CACHE TABLE first if you skipped it. Uncomment what
+-- you want to run, or run it directly in the SQL Editor. The example
+-- queries further down are left live, same as before; all 8 ran
+-- successfully on 2026-10-24 (see the create script's Status).
 -- =============================================================================
 
 -- === Verification ===

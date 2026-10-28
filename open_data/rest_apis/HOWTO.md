@@ -9,7 +9,7 @@ Start with [Start here](../../START-HERE.md) and [your first dataset](../../docs
 
 - `sql/rate_limited/` — the source API caps how many requests you can make in a given window. Some operators set the limit themselves, so it differs between deployments. For `company_dns` it depends on whether you identify yourself: Callers that identify themselves (a User-Agent of the form `app_name user@domain.tld`) get 6,000 requests a minute (100 a second) with a burst of 600, per address. Callers that do not (no User-Agent, a library default, or a name with no contact) get 600 a minute with a burst of 60, a limit raised for the event; the service default is 5 a minute with a burst of 1. A burst larger than the allowance gets HTTP `429` even when the average is low. Run these deliberately: send an identifying `User-Agent`, run one statement at a time, cache the raw table straight away (`CACHE TABLE`, which these scripts do for you), and if you cannot identify yourself wait 15 seconds or more before each statement that calls the endpoint. Prefer a registered API key over an anonymous one where the source offers it, and expect the `CACHE TABLE` guidance in "Known limitations" below to matter more here than elsewhere. Every `_select.sql` here keeps its queries commented out: run them one at a time after the cache test the file describes.
 - `sql/non_rate_limited/` — no documented limit, or an informal one (e.g. a fair-use policy) with no hard cap observed in testing. Still be a reasonable citizen of a shared free resource, but you don't need to plan around exhausting a quota.
-- `sql/known_to_fail/` — two sources (Singapore's PM2.5 API and NASA DONKI) that hit a blocking issue during testing. Kept as a documented, reproducible example rather than deleted; not part of the main sequence below. See `sql/known_to_fail/README.md` and its `ISSUE.md`.
+- `sql/known_to_fail/` — NASA DONKI, which hit a blocking issue during testing, plus the issue record for Singapore's PM2.5 API (its scripts moved to `sql/rate_limited/` after a later run passed). Kept as documented, reproducible examples rather than deleted; not part of the main sequence below. See `sql/known_to_fail/README.md`.
 
 - `sql/deprecated/` — scripts that a newer script replaced (currently the old V3-only `company_dns` script, replaced by `rate_limited/12_company_dns_*.sql`). Kept for reference, marked DEPRECATED in their own header and in the catalog, and refused by `scripts/onboard.py` unless you pass `--allow-deprecated`. Do not run a deprecated script and its replacement on the same instance: they create the same names.
 
@@ -82,8 +82,7 @@ Suggested order, from simpler verified patterns to higher-risk shapes:
 | 8 | `non_rate_limited/09_abs_data_api_create.sql` | Higher risk: SDMX-JSON with doubly-compound dynamic keys — same risk class as Eurostat, likely drop candidate. |
 | 9 | `rate_limited/13_company_dns_eu_nace_create.sql` | Same flat-array shape as `company_dns` V4, one view; a different classification system (EU NACE). Rate limited. |
 | 10 | `rate_limited/14_company_dns_japan_create.sql` | Same shape again (Japan, 1,460 classes). Rate limited, same service as 12 and 13. |
-
-**Excluded:** Singapore PM2.5 registration returned HTTP 502. See the [issue write-up](sql/known_to_fail/ISSUE.md).
+| 11 | `rate_limited/04_singapore_pm25_create.sql` | Array-of-structs under a non-array wrapper key (`data.items`), plus a one-pass `stack()` unpivot. Tight burst limit: run one statement at a time; the script caches the raw table straight after creating it. |
 
 ---
 
@@ -128,7 +127,7 @@ The unquoted forms may fail or parse incorrectly because Zetaris treats the name
 
 Check the view's own `CREATE SCHEMASTORE VIEW ... AS SELECT` list. A comment or a similar view may name columns this view does not expose.
 
-Check the raw response too. Singapore PM2.5's documented `national` field was absent from the JSON; see the [issue write-up](sql/known_to_fail/ISSUE.md).
+Check the raw response too. Singapore PM2.5's documented `national` field was absent from the JSON; see caveat 2 in [`rate_limited/04_singapore_pm25_create.sql`](sql/rate_limited/04_singapore_pm25_create.sql).
 
 ### My query failed with `MISSING_ATTRIBUTES.RESOLVED_ATTRIBUTE_APPEAR_IN_OPERATION`
 
@@ -160,6 +159,8 @@ WHERE rn = 1;
 
 Use `COUNT(*) OVER (PARTITION BY key)` for group counts or `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)` to select a top row. See the StatCan and Open Food Facts select scripts for examples.
 
+The same error can come from a view *definition*. Singapore PM2.5's long-format view, written as five `UNION ALL` branches over one view, failed at `CREATE SCHEMASTORE VIEW`. One pass with `LATERAL VIEW stack(n, 'label', value, ...)` over the base table builds the same rows; see caveat 5 in [`rate_limited/04_singapore_pm25_create.sql`](sql/rate_limited/04_singapore_pm25_create.sql).
+
 ### A numeric-looking field sorts or compares wrong (e.g. "closest" or "smallest" picks the wrong row)
 
 JSON may encode numeric-looking values as strings. NeoWs distance and velocity fields are quoted strings, so Zetaris can sort them lexicographically. Cast them to `DOUBLE`, `INT`, or `BIGINT` in the view before numeric comparisons or aggregation.
@@ -174,7 +175,7 @@ Compare the Zetaris count with a direct API count first. Apple's EDGAR `us-gaap:
 
 ### `CREATE LIGHTNING REST TABLE` (or the Data Explorer previewing a new source) returned an HTTP 502
 
-Check the endpoint directly with `curl` before changing headers or authentication. The Singapore PM2.5 endpoint returned HTTP 200 to a plain GET, but rapid testing hit 429 after about 5–6 requests in 5–8 seconds and recovered after about 30 seconds. Its first Zetaris registration returned 502, not the upstream 429; the cause of that difference remains unresolved. See the [issue write-up](sql/known_to_fail/ISSUE.md).
+Check the endpoint directly with `curl` before changing headers or authentication. The Singapore PM2.5 endpoint returned HTTP 200 to a plain GET, but rapid testing hit 429 after about 5–6 requests in 5–8 seconds and recovered after about 30 seconds. Its first Zetaris registration (cloud SQL Workspace) returned 502, not the upstream 429. A later run on Zetaris 2.4.3.1 through the SQL API did not reproduce the 502: rapid uncached queries surfaced the source's own 429, and `CACHE TABLE` stopped the re-fetching. The original 502 is not yet reconciled; see the [issue write-up](sql/known_to_fail/ISSUE.md).
 
 Wait about 30 seconds before retrying a rate-limited endpoint. Avoid probing it with repeated `curl` calls immediately beforehand. If 502s persist, check the source API again at a slower interval.
 
@@ -287,7 +288,7 @@ See the [SQL companion](../../docs/guides/zetaris-lightning-sql-companion.md#5-o
 
 Two issues are specific to these sources:
 
-- Singapore PM2.5 registration returned HTTP 502; see its [issue](sql/known_to_fail/ISSUE.md).
+- Singapore PM2.5 has a burst limit far tighter than documented (about 5–6 requests in 5–8 seconds). Cache the raw table straight after creating it, as the script does; see its caveat 4.
 - StatCan's `getCubeMetadata` requires `Content-Type: application/json`; the form-encoded request returned 415 in direct `curl` testing. This is the package's example of the JSON-body limitation.
 
 ---
@@ -299,7 +300,7 @@ See the [SQL companion's REST-shape sections](../../docs/guides/zetaris-lightnin
 Source shapes in this package:
 
 1. **Top-level object, array-of-structs field(s)** (companion guide §2, case 1) — EDGAR, PokéAPI, Open Food Facts live API, NASA NeoWs, and the `company_dns` V4, EU NACE and Japan endpoints (a flat array of objects directly under `data`, so a plain `explode(data)` is enough). PokéAPI nests a struct *inside* the array's struct (`ability.ability.name`, two levels deep, confirmed working). Open Food Facts' `ingredients` array goes further still — some entries are compound ingredients carrying their own nested `ingredients` sub-array (e.g. a biscuit's "Céréale" entry breaking down into wheat flour and whole wheat flour) — a single `explode()` only reaches the top-level entries; going deeper would need a second `explode()`, not built in that script.
-2. **Array-of-structs nested under a non-array wrapper key** (companion guide §2, case 2) — Singapore's PM2.5 API (`sql/known_to_fail/`, see "Known limitations" above): the array lives at `data.items`, each item's per-region breakdown (`readings.pm25_one_hourly`) is itself a fixed struct, not an array.
+2. **Array-of-structs nested under a non-array wrapper key** (companion guide §2, case 2) — Singapore's PM2.5 API (`sql/rate_limited/04_singapore_pm25_create.sql`): the array lives at `data.items`, each item's per-region breakdown (`readings.pm25_one_hourly`) is itself a fixed struct, not an array.
 3. **Top-level JSON array, no wrapping object** (companion guide §2, case 3) — NASA DONKI's CME endpoint (known to fail: NASA's gateway returns HTTP 503 for it, see `sql/known_to_fail/ISSUE-06-nasa-donki.md`). Every confirmed-working source so far returns a top-level object; whether `CREATE LIGHTNING REST TABLE` can register a table from a bare top-level array is untested, and may be related.
 4. **Dynamic-key ("map-shaped") object** (companion guide §3) — Eurostat, the Australian ABS Data API, and `company_dns`'s V3 SIC lookup (see the Fast Start above; its V4 endpoint dropped the dynamic keys) all use the `from_json(to_json(...), 'map<...>')` coercion technique. For Eurostat specifically, the sparse `value` object is addressable two ways — a low-risk option (direct backtick-quoted dot-access to specific known-present numeric keys, e.g. `` value.`522` ``) and the higher-risk full-decode coercion, which needs to be applied to *every* dynamic-key object exploded in the same query — see `sql/non_rate_limited/07_eurostat_create.sql`'s caveats for the exact error a partial application produces. Whether the same technique helps ABS's doubly-compound-key structure is untested and likely harder, since ABS needs two levels of key decoding, not one.
 5. **Flat struct, no array anywhere** — Open Food Facts' `product.nutriments`, plain dot-access all the way down (`product.nutriments.sugars_100g`), no `LATERAL VIEW explode()` involved. Don't reach for `explode()` reflexively on every nested field; check whether the JSON node is actually an array first.

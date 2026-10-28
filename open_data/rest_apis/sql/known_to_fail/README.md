@@ -6,9 +6,10 @@ These are not included in `sql/rate_limited/` or `sql/non_rate_limited/`, and ar
 
 ## Index
 
+Singapore data.gov.sg PM2.5 used to be listed here. A later live run (2026-10-24, Zetaris 2.4.3.1, SQL API) passed, so its scripts moved to [`../rate_limited/`](../rate_limited/04_singapore_pm25_create.sql). Its [`ISSUE.md`](ISSUE.md) stays here as the record of the original HTTP 502, marked contradicted by a later run and not yet reconciled.
+
 | Source | Script | Status | Summary |
 |---|---|---|---|
-| Singapore data.gov.sg — PM2.5 real-time API | [`04_singapore_pm25_create.sql`](04_singapore_pm25_create.sql) | Known to fail | `CREATE LIGHTNING REST TABLE` returned an HTTP 502 on the first (and only) statement run against it. The source API itself is reachable, requires no special headers or auth, but has a real burst rate limit much tighter than documented — leading hypothesis is the connector issues more than one request per statement (schema introspection, a Data Explorer preview fetch, and/or a retry), tripping that limit. Not confirmed from the Zetaris side. See [`ISSUE.md`](ISSUE.md). |
 | NASA DONKI (CME) | [`06_nasa_donki_create.sql`](06_nasa_donki_create.sql) | Known to fail | Fails with HTTP 503 ("upstream connect error ... remote connection failure") from NASA's API gateway. The same 503 comes back from plain `curl` outside Zetaris, while NeoWs works with the same key, so the failure is NASA-side and may be transient. See [`ISSUE-06-nasa-donki.md`](ISSUE-06-nasa-donki.md). |
 
 ## Adding a new known-to-fail source
