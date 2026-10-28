@@ -25,6 +25,7 @@ const groups = [
     ['open_data/rest_apis/rest-api-sources.md', 'REST source catalog'],
     ['open_data/parquet_csv/HOWTO.md', 'File cookbook'],
     ['open_data/parquet_csv/parquet-csv-data-sources.md', 'File source catalog'],
+    ['docs/guides/upload-pdf.md', 'Upload a PDF'],
     ['open_data/usl/HOWTO.md', 'USL cookbook'],
     ['open_data/usl/usl-sources.md', 'USL model catalog'],
     ['docs/guides/create-edgar-pudl-noaa-usl.md', 'EDGAR, PUDL and NOAA'],
@@ -38,6 +39,7 @@ const groups = [
   ]],
   ['Help and reference', [
     ['docs/guides/troubleshooting.md', 'Troubleshooting'],
+    ['docs/guides/driver-memory-wide-json.md', 'Driver memory and wide JSON'],
     ['docs/guides/permissions.md', 'Permissions'],
     ['docs/guides/zetaris-lightning-sql-commands.md', 'Lightning SQL commands'],
     ['docs/guides/zetaris-lightning-sql-companion.md', 'SQL gotchas and limits'],
@@ -45,6 +47,7 @@ const groups = [
   ['Installation', [
     ['docs/install/choose-install.md', 'Choose an install'],
     ['docs/install/updated_zetaris_installation_guide.md', 'Install locally'],
+    ['docs/install/github-codespaces-guide.md', 'GitHub Codespaces (Experimental)'],
     ['docs/install/aws-free-tier-checklist.md', 'AWS Free Tier setup'],
     ['docs/install/managed-aws-cluster-guide.md', 'Managed AWS cluster'],
   ]],
